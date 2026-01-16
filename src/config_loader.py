@@ -69,18 +69,20 @@ def _get_list(name: str, default: list[str] | None = None) -> list[str] | None:
 
 
 CONFIG = {
-    "taapi_api_key": _get_env("TAAPI_API_KEY", required=True),
+    "taapi_api_key": _get_env("TAAPI_API_KEY", required=False),
     "hyperliquid_private_key": _get_env("HYPERLIQUID_PRIVATE_KEY") or _get_env("LIGHTER_PRIVATE_KEY"),
     "mnemonic": _get_env("MNEMONIC"),
     # Hyperliquid network/base URL overrides
     "hyperliquid_base_url": _get_env("HYPERLIQUID_BASE_URL"),
     "hyperliquid_network": _get_env("HYPERLIQUID_NETWORK", "mainnet"),
-    # LLM via OpenRouter
-    "openrouter_api_key": _get_env("OPENROUTER_API_KEY", required=True),
+    # LLM configuration
+    "llm_provider": _get_env("LLM_PROVIDER", "openai"),  # openai or openrouter
+    "openai_api_key": _get_env("OPENAI_API_KEY"),
+    "openrouter_api_key": _get_env("OPENROUTER_API_KEY"),
     "openrouter_base_url": _get_env("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
     "openrouter_referer": _get_env("OPENROUTER_REFERER"),
     "openrouter_app_title": _get_env("OPENROUTER_APP_TITLE", "trading-agent"),
-    "llm_model": _get_env("LLM_MODEL", "x-ai/grok-4"),
+    "llm_model": _get_env("LLM_MODEL", "gpt-4o-mini"),
     # Reasoning tokens
     "reasoning_enabled": _get_bool("REASONING_ENABLED", False),
     "reasoning_effort": _get_env("REASONING_EFFORT", "high"),
@@ -90,6 +92,7 @@ CONFIG = {
     # Runtime controls via env
     "assets": _get_env("ASSETS"),  # e.g., "BTC ETH SOL" or "BTC,ETH,SOL"
     "interval": _get_env("INTERVAL"),  # e.g., "5m", "1h"
+    "risk_profile": _get_env("RISK_PROFILE", "conservative"),  # conservative, moderate, high
     # API server
     "api_host": _get_env("API_HOST", "0.0.0.0"),
     "api_port": _get_env("APP_PORT") or _get_env("API_PORT") or "3000",

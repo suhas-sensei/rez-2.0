@@ -2,7 +2,7 @@
 
 import requests
 from src.config_loader import CONFIG
-from src.indicators.taapi_client import TAAPIClient
+from src.indicators.local_indicators import LocalIndicatorCalculator
 import json
 import logging
 from datetime import datetime
@@ -10,17 +10,27 @@ from datetime import datetime
 class TradingAgent:
     """High-level trading agent that delegates reasoning to an LLM service."""
 
-    def __init__(self):
+    def __init__(self, risk_profile="conservative"):
         """Initialize LLM configuration, metadata headers, and indicator helper."""
         self.model = CONFIG["llm_model"]
-        self.api_key = CONFIG["openrouter_api_key"]
-        base = CONFIG["openrouter_base_url"]
-        self.base_url = f"{base}/chat/completions"
-        self.referer = CONFIG.get("openrouter_referer")
-        self.app_title = CONFIG.get("openrouter_app_title")
-        self.taapi = TAAPIClient()
+        self.provider = CONFIG.get("llm_provider", "openai")
+
+        if self.provider == "openai":
+            self.api_key = CONFIG["openai_api_key"]
+            self.base_url = "https://api.openai.com/v1/chat/completions"
+            self.referer = None
+            self.app_title = None
+        else:  # openrouter
+            self.api_key = CONFIG["openrouter_api_key"]
+            base = CONFIG["openrouter_base_url"]
+            self.base_url = f"{base}/chat/completions"
+            self.referer = CONFIG.get("openrouter_referer")
+            self.app_title = CONFIG.get("openrouter_app_title")
+
+        self.indicator_calc = LocalIndicatorCalculator()
+        self.risk_profile = risk_profile
         # Fast/cheap sanitizer model to normalize outputs on parse failures
-        self.sanitize_model = CONFIG.get("sanitize_model") or "openai/gpt-5"
+        self.sanitize_model = CONFIG.get("sanitize_model") or "gpt-4o-mini"
 
     def decide_trade(self, assets, context):
         """Decide for multiple assets in one call.
@@ -36,6 +46,43 @@ class TradingAgent:
 
     def _decide(self, context, assets):
         """Dispatch decision request to the LLM and enforce output contract."""
+
+        # Risk-profile specific guidance
+        if self.risk_profile == "high":
+            risk_guidance = (
+                "RISK PROFILE: HIGH - AGGRESSIVE TRADING MODE\n"
+                "- TAKE TRADES FREQUENTLY - Don't wait for perfect setups. Trade on moderate signals.\n"
+                "- REDUCED COOLDOWN: Only 1 bar cooldown (5m) between trades. Be active.\n"
+                "- LOWER CONFLUENCE REQUIRED: RSI >55 or <45 is enough for entry. Don't need all indicators aligned.\n"
+                "- ALLOCATE 60-80% of available balance per trade for meaningful exposure.\n"
+                "- USE 10-20X LEVERAGE to maximize returns on small moves.\n"
+                "- TIGHT STOPS: Use 0.3-0.5% stop losses to churn positions frequently.\n"
+                "- QUICK EXITS: Take profit at 0.5-1% gains. Don't wait for big moves.\n"
+                "- IGNORE HYSTERESIS: Trade both directions actively based on current signals.\n"
+                "- FUNDING IRRELEVANT: Trade regardless of funding rates.\n"
+                "- BE DECISIVE: When in doubt, take a position. Holding is losing opportunity.\n\n"
+            )
+        elif self.risk_profile == "moderate":
+            risk_guidance = (
+                "RISK PROFILE: MODERATE - BALANCED TRADING\n"
+                "- ALLOCATE 40-60% of available balance per trade.\n"
+                "- USE 5-10X LEVERAGE for enhanced returns.\n"
+                "- COOLDOWN: 2 bars (10m) between direction changes.\n"
+                "- MODERATE CONFLUENCE: Need 2 out of 3 indicators aligned (EMA, RSI, MACD).\n"
+                "- NORMAL STOPS: 0.5-1% stop losses.\n"
+                "- Take profits at 1-2% gains.\n\n"
+            )
+        else:  # conservative
+            risk_guidance = (
+                "RISK PROFILE: CONSERVATIVE - CAREFUL TRADING\n"
+                "- ALLOCATE 20-40% of available balance per trade.\n"
+                "- USE 3-5X LEVERAGE maximum.\n"
+                "- COOLDOWN: 3 bars (15m) between direction changes.\n"
+                "- HIGH CONFLUENCE: Need multiple timeframes and indicators aligned.\n"
+                "- WIDE STOPS: 1-2% stop losses for room to breathe.\n"
+                "- Take profits at 2-4% gains.\n\n"
+            )
+
         system_prompt = (
             "You are a rigorous QUANTITATIVE TRADER and interdisciplinary MATHEMATICIAN-ENGINEER optimizing risk-adjusted returns for perpetual futures under real execution, margin, and funding constraints.\n"
             "You will receive market + account context for SEVERAL assets, including:\n"
@@ -43,34 +90,27 @@ class TradingAgent:
             "- per-asset intraday (5m) and higher-timeframe (4h) metrics\n"
             "- Active Trades with Exit Plans\n"
             "- Recent Trading History\n\n"
+            f"{risk_guidance}"
             "Always use the 'current time' provided in the user message to evaluate any time-based conditions, such as cooldown expirations or timed exit plans.\n\n"
-            "Your goal: make decisive, first-principles decisions per asset that minimize churn while capturing edge.\n\n"
-            "Aggressively pursue setups where calculated risk is outweighed by expected edge; size positions so downside is controlled while upside remains meaningful.\n\n"
-            "Core policy (low-churn, position-aware)\n"
-            "1) Respect prior plans: If an active trade has an exit_plan with explicit invalidation (e.g., “close if 4h close above EMA50”), DO NOT close or flip early unless that invalidation (or a stronger one) has occurred.\n"
-            "2) Hysteresis: Require stronger evidence to CHANGE a decision than to keep it. Only flip direction if BOTH:\n"
-            "   a) Higher-timeframe structure supports the new direction (e.g., 4h EMA20 vs EMA50 and/or MACD regime), AND\n"
-            "   b) Intraday structure confirms with a decisive break beyond ~0.5×ATR (recent) and momentum alignment (MACD or RSI slope).\n"
-            "   Otherwise, prefer HOLD or adjust TP/SL.\n"
-            "3) Cooldown: After opening, adding, reducing, or flipping, impose a self-cooldown of at least 3 bars of the decision timeframe (e.g., 3×5m = 15m) before another direction change, unless a hard invalidation occurs. Encode this in exit_plan (e.g., “cooldown_bars:3 until 2025-10-19T15:55Z”). You must honor your own cooldowns on future cycles.\n"
-            "4) Funding is a tilt, not a trigger: Do NOT open/close/flip solely due to funding unless expected funding over your intended holding horizon meaningfully exceeds expected edge (e.g., > ~0.25×ATR). Consider that funding accrues discretely and slowly relative to 5m bars.\n"
-            "5) Overbought/oversold ≠ reversal by itself: Treat RSI extremes as risk-of-pullback. You need structure + momentum confirmation to bet against trend. Prefer tightening stops or taking partial profits over instant flips.\n"
-            "6) Prefer adjustments over exits: If the thesis weakens but is not invalidated, first consider: tighten stop (e.g., to a recent swing or ATR multiple), trail TP, or reduce size. Flip only on hard invalidation + fresh confluence.\n\n"
+            "Your goal: make decisive, first-principles decisions per asset that balance risk and reward according to the risk profile.\n\n"
+            "Core policy\n"
+            "1) Respect prior plans: If an active trade has an exit_plan with explicit invalidation, honor it unless invalidation occurred.\n"
+            "2) Trade frequency: Follow the cooldown guidance from your risk profile.\n"
+            "3) Confluence requirements: Follow the signal strength requirements from your risk profile.\n"
+            "4) Position sizing: Follow the allocation guidance from your risk profile.\n\n"
             "Decision discipline (per asset)\n"
             "- Choose one: buy / sell / hold.\n"
-            "- Proactively harvest profits when price action presents a clear, high-quality opportunity that aligns with your thesis.\n"
             "- You control allocation_usd.\n"
             "- TP/SL sanity:\n"
             "  • BUY: tp_price > current_price, sl_price < current_price\n"
             "  • SELL: tp_price < current_price, sl_price > current_price\n"
             "  If sensible TP/SL cannot be set, use null and explain the logic.\n"
-            "- exit_plan must include at least ONE explicit invalidation trigger and may include cooldown guidance you will follow later.\n\n"
+            "- exit_plan must include at least ONE explicit invalidation trigger.\n\n"
             "Leverage policy (perpetual futures)\n"
-            "- YOU CAN USE LEVERAGE, ATLEAST 3X LEVERAGE TO GET BETTER RETURN, KEEP IT WITHIN 10X IN TOTAL\n"
-            "- In high volatility (elevated ATR) or during funding spikes, reduce or avoid leverage.\n"
-            "- Treat allocation_usd as notional exposure; keep it consistent with safe leverage and available margin.\n\n"
+            "- Follow leverage guidance from your risk profile.\n"
+            "- Treat allocation_usd as notional exposure.\n\n"
             "Tool usage\n"
-            "- Aggressively leverage fetch_taapi_indicator whenever an additional datapoint could sharpen your thesis; keep parameters minimal (indicator, symbol like \"BTC/USDT\", interval \"5m\"/\"4h\", optional period).\n"
+            "- Aggressively leverage fetch_indicator whenever an additional datapoint could sharpen your thesis; keep parameters minimal (indicator, symbol like \"BTC/USDT\", interval \"5m\"/\"4h\", optional period).\n"
             "- Incorporate tool findings into your reasoning, but NEVER paste raw tool responses into the final JSON—summarize the insight instead.\n"
             "- Use tools to upgrade your analysis; lack of confidence is a cue to query them before deciding."
             "Reasoning recipe (first principles)\n"
@@ -92,11 +132,10 @@ class TradingAgent:
         tools = [{
             "type": "function",
             "function": {
-                "name": "fetch_taapi_indicator",
-                "description": ("Fetch any TAAPI indicator. Available: ema, sma, rsi, macd, bbands, stochastic, stochrsi, "
-                    "adx, atr, cci, dmi, ichimoku, supertrend, vwap, obv, mfi, willr, roc, mom, sar (parabolic), "
-                    "fibonacci, pivotpoints, keltner, donchian, awesome, gator, alligator, and 200+ more. "
-                    "See https://taapi.io/indicators/ for full list and parameters."),
+                "name": "fetch_indicator",
+                "description": ("Calculate technical indicator from live Binance data. Available: ema, sma, rsi, macd, atr, "
+                    "bbands, stochastic, adx, and other common indicators. "
+                    "Specify indicator name, symbol (e.g. 'BTC/USDT'), interval (e.g. '5m', '1h', '4h'), and optional period."),
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -297,33 +336,33 @@ class TradingAgent:
             tool_calls = message.get("tool_calls") or []
             if allow_tools and tool_calls:
                 for tc in tool_calls:
-                    if tc.get("type") == "function" and tc.get("function", {}).get("name") == "fetch_taapi_indicator":
+                    if tc.get("type") == "function" and tc.get("function", {}).get("name") == "fetch_indicator":
                         args = json.loads(tc["function"].get("arguments") or "{}")
                         try:
-                            params = {
-                                "secret": self.taapi.api_key,
-                                "exchange": "binance",
-                                "symbol": args["symbol"],
-                                "interval": args["interval"],
-                            }
+                            indicator = args["indicator"]
+                            symbol = args["symbol"]
+                            interval = args["interval"]
+                            params = {}
                             if args.get("period") is not None:
                                 params["period"] = args["period"]
-                            if args.get("backtrack") is not None:
-                                params["backtrack"] = args["backtrack"]
                             if isinstance(args.get("other_params"), dict):
                                 params.update(args["other_params"])
-                            ind_resp = requests.get(f"{self.taapi.base_url}{args['indicator']}", params=params, timeout=30).json()
+
+                            # Calculate indicator locally using Binance data
+                            value = self.indicator_calc.fetch_value(indicator, symbol, interval, params=params)
+                            ind_resp = {"value": value, "indicator": indicator, "symbol": symbol, "interval": interval}
+
                             messages.append({
                                 "role": "tool",
                                 "tool_call_id": tc.get("id"),
-                                "name": "fetch_taapi_indicator",
+                                "name": "fetch_indicator",
                                 "content": json.dumps(ind_resp),
                             })
-                        except (requests.RequestException, json.JSONDecodeError, KeyError, ValueError) as ex:
+                        except (KeyError, ValueError, Exception) as ex:
                             messages.append({
                                 "role": "tool",
                                 "tool_call_id": tc.get("id"),
-                                "name": "fetch_taapi_indicator",
+                                "name": "fetch_indicator",
                                 "content": f"Error: {str(ex)}",
                             })
                 continue

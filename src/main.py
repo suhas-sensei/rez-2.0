@@ -5,7 +5,7 @@ import argparse
 import pathlib
 sys.path.append(str(pathlib.Path(__file__).parent.parent))
 from src.agent.decision_maker import TradingAgent
-from src.indicators.taapi_client import TAAPIClient
+from src.indicators.local_indicators import LocalIndicatorCalculator
 from src.trading.hyperliquid_api import HyperliquidAPI
 import asyncio
 import logging
@@ -46,12 +46,15 @@ def main():
     parser = argparse.ArgumentParser(description="LLM-based Trading Agent on Hyperliquid")
     parser.add_argument("--assets", type=str, nargs="+", required=False, help="Assets to trade, e.g., BTC ETH")
     parser.add_argument("--interval", type=str, required=False, help="Interval period, e.g., 1h")
+    parser.add_argument("--risk-profile", type=str, choices=["conservative", "moderate", "high"], required=False, help="Risk profile: conservative (default), moderate, or high")
     args = parser.parse_args()
 
-    # Allow assets/interval via .env (CONFIG) if CLI not provided
+    # Allow assets/interval/risk-profile via .env (CONFIG) if CLI not provided
     from src.config_loader import CONFIG
     assets_env = CONFIG.get("assets")
     interval_env = CONFIG.get("interval")
+    risk_profile_env = CONFIG.get("risk_profile", "conservative")
+
     if (not args.assets or len(args.assets) == 0) and assets_env:
         # Support space or comma separated
         if "," in assets_env:
@@ -60,13 +63,15 @@ def main():
             args.assets = [a.strip() for a in assets_env.split(" ") if a.strip()]
     if not args.interval and interval_env:
         args.interval = interval_env
+    if not args.risk_profile:
+        args.risk_profile = risk_profile_env
 
     if not args.assets or not args.interval:
         parser.error("Please provide --assets and --interval, or set ASSETS and INTERVAL in .env")
 
-    taapi = TAAPIClient()
+    taapi = LocalIndicatorCalculator()
     hyperliquid = HyperliquidAPI()
-    agent = TradingAgent()
+    agent = TradingAgent(risk_profile=args.risk_profile)
 
 
     start_time = datetime.now(timezone.utc)
@@ -78,8 +83,11 @@ def main():
     initial_account_value = None
     # Perp mid-price history sampled each loop (authoritative, avoids spot/perp basis mismatch)
     price_history = {}
+    # Track assets we just traded to avoid immediate reconciliation
+    just_traded_assets = set()
 
     print(f"Starting trading agent for assets: {args.assets} at interval: {args.interval}")
+    print(f"Risk Profile: {args.risk_profile.upper()} - {'AGGRESSIVE TRADING MODE' if args.risk_profile == 'high' else 'Balanced trading' if args.risk_profile == 'moderate' else 'Conservative trading'}")
 
     def add_event(msg: str):
         """Log an informational event and push it into the recent events deque."""
@@ -91,6 +99,9 @@ def main():
         while True:
             invocation_count += 1
             minutes_since_start = (datetime.now(timezone.utc) - start_time).total_seconds() / 60
+
+            # Clear just-traded tracking from previous iteration
+            just_traded_assets.clear()
 
             # Global account state
             state = await hyperliquid.get_user_state()
@@ -143,7 +154,7 @@ def main():
             except Exception:
                 open_orders = []
 
-            # Reconcile active trades
+            # Reconcile active trades (but skip assets we just traded)
             try:
                 assets_with_positions = set()
                 for pos in state['positions']:
@@ -155,6 +166,9 @@ def main():
                 assets_with_orders = {o.get('coin') for o in (open_orders or []) if o.get('coin')}
                 for tr in active_trades[:]:
                     asset = tr.get('asset')
+                    # Skip reconciliation for assets we just traded this iteration
+                    if asset in just_traded_assets:
+                        continue
                     if asset not in assets_with_positions and asset not in assets_with_orders:
                         add_event(f"Reconciling stale active trade for {asset} (no position, no orders)")
                         active_trades.remove(tr)
@@ -370,7 +384,35 @@ def main():
                         if alloc_usd <= 0:
                             add_event(f"Holding {asset}: zero/negative allocation")
                             continue
-                        amount = alloc_usd / current_price
+
+                        # Check if we have an existing position
+                        existing_position = None
+                        for pos in state['positions']:
+                            if pos.get('coin') == asset:
+                                existing_position = pos
+                                break
+
+                        # Determine amount and action type
+                        if existing_position:
+                            existing_size = float(existing_position.get('szi', 0))
+                            existing_is_long = existing_size > 0
+                            abs_size = abs(existing_size)
+
+                            if (is_buy and existing_is_long) or (not is_buy and not existing_is_long):
+                                # Same direction - adding to position
+                                amount = alloc_usd / current_price
+                                add_event(f"Adding to existing {asset} {'LONG' if is_buy else 'SHORT'} position")
+                            else:
+                                # Opposite direction - closing position (possibly flipping)
+                                amount = abs_size  # Use exact position size to close
+                                add_event(f"Closing existing {asset} {'LONG' if existing_is_long else 'SHORT'} position (size: {amount})")
+                        else:
+                            # No existing position - opening new
+                            amount = alloc_usd / current_price
+                            add_event(f"Opening new {asset} {'LONG' if is_buy else 'SHORT'} position")
+
+                        # Mark asset as traded
+                        just_traded_assets.add(asset)
 
                         order = await hyperliquid.place_buy_order(asset, amount) if is_buy else await hyperliquid.place_sell_order(asset, amount)
                         # Confirm by checking recent fills for this asset shortly after placing
@@ -397,23 +439,38 @@ def main():
                             sl_oids = hyperliquid.extract_oids(sl_order)
                             sl_oid = sl_oids[0] if sl_oids else None
                             add_event(f"SL placed {asset} at {output['sl_price']}")
-                        # Reconcile: if opposite-side position exists or TP/SL just filled, clear stale active_trades for this asset
+                        # Update active_trades tracking
+                        # Remove old tracking for this asset
                         for existing in active_trades[:]:
                             if existing.get('asset') == asset:
                                 try:
                                     active_trades.remove(existing)
                                 except ValueError:
                                     pass
-                        active_trades.append({
-                            "asset": asset,
-                            "is_long": is_buy,
-                            "amount": amount,
-                            "entry_price": current_price,
-                            "tp_oid": tp_oid,
-                            "sl_oid": sl_oid,
-                            "exit_plan": output["exit_plan"],
-                            "opened_at": datetime.now().isoformat()
-                        })
+
+                        # Only add to active_trades if we're opening/adding to a position
+                        # If we closed a position (existing_position and opposite direction), don't track it
+                        should_track = True
+                        if existing_position:
+                            existing_size = float(existing_position.get('szi', 0))
+                            existing_is_long = existing_size > 0
+                            if (is_buy and not existing_is_long) or (not is_buy and existing_is_long):
+                                # We closed the position
+                                should_track = False
+                                add_event(f"Position closed for {asset}")
+
+                        if should_track:
+                            active_trades.append({
+                                "asset": asset,
+                                "is_long": is_buy,
+                                "amount": amount,
+                                "entry_price": current_price,
+                                "tp_oid": tp_oid,
+                                "sl_oid": sl_oid,
+                                "exit_plan": output["exit_plan"],
+                                "opened_at": datetime.now().isoformat()
+                            })
+
                         add_event(f"{action.upper()} {asset} amount {amount:.4f} at ~{current_price}")
                         if rationale:
                             add_event(f"Post-trade rationale for {asset}: {rationale}")

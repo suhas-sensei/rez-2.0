@@ -188,13 +188,13 @@ export default function TradesDashboard() {
     <div className="bg-white font-inter w-full">
       {/* Tabs */}
       <div className="border-b border-gray-200">
-        <div className="w-full px-0">
-          <div className="flex">
+        <div className="w-full px-0 overflow-x-auto scrollbar-hide">
+          <div className="flex min-w-max">
             {TABS.map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-3 py-2 text-[10px] font-medium transition-colors ${
+                className={`px-3 xl:px-5 py-2 xl:py-3 text-[10px] sm:text-xs xl:text-sm 2xl:text-base font-medium transition-colors whitespace-nowrap ${
                   activeTab === tab
                     ? 'bg-gray-100 text-black border-b-2 border-black'
                     : 'text-gray-500 hover:text-black hover:bg-gray-50'
@@ -209,13 +209,13 @@ export default function TradesDashboard() {
 
       {/* Filter Bar */}
       <div className="border-b border-gray-200">
-        <div className="w-full px-4 py-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-600">FILTER:</span>
+        <div className="w-full px-3 sm:px-4 xl:px-6 py-2 xl:py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+          <div className="flex items-center gap-2 xl:gap-3">
+            <span className="text-xs xl:text-sm 2xl:text-base font-medium text-gray-600">FILTER:</span>
             <select
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
-              className="text-xs font-medium border border-gray-300 rounded px-2 py-1 bg-white"
+              className="text-xs xl:text-sm 2xl:text-base font-medium border border-gray-300 rounded px-2 xl:px-3 py-1 xl:py-2 bg-white"
             >
               {MODELS.map((model) => (
                 <option key={model} value={model}>
@@ -224,7 +224,7 @@ export default function TradesDashboard() {
               ))}
             </select>
           </div>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs xl:text-sm 2xl:text-base text-gray-500">
             {activeTab === 'COMPLETED TRADES' && `Showing Last ${filteredTrades.length} Trades`}
             {activeTab === 'POSITIONS' && `${filteredPositions.length} Open Positions`}
             {activeTab === 'MODELCHAT' && `${filteredChat.length} Messages`}
@@ -234,36 +234,35 @@ export default function TradesDashboard() {
       </div>
 
       {/* Content */}
-      <div className="w-full px-3 py-3">
+      <div className="w-full px-2 sm:px-3 xl:px-6 py-3 xl:py-5">
         {/* COMPLETED TRADES */}
         {activeTab === 'COMPLETED TRADES' && (
-          <div className="space-y-4">
+          <div className="space-y-4 xl:space-y-6">
             {filteredTrades.map((trade) => (
-              <div key={trade.id} className="border-b border-gray-100 pb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 text-sm">↻</span>
-                    <span className="text-sm font-medium text-orange-500">{trade.model}</span>
+              <div key={trade.id} className="border-b border-gray-100 pb-4 xl:pb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 xl:mb-3 gap-1 sm:gap-0">
+                  <div className="flex items-center gap-1 sm:gap-2 xl:gap-3 flex-wrap">
+                    <span className="text-gray-400 text-sm xl:text-base 2xl:text-lg">↻</span>
+                    <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium text-orange-500">{trade.model}</span>
                     {trade.prevModel && (
-                      <span className="text-xs text-gray-400">(prev. {trade.prevModel})</span>
+                      <span className="text-[10px] sm:text-xs xl:text-sm text-gray-400">(prev. {trade.prevModel})</span>
                     )}
-                    <span className="text-sm text-gray-600">{trade.action}</span>
-                    <span className={`text-sm ${ASSET_ICONS[trade.asset]?.color || 'text-gray-600'}`}>
+                    <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg text-gray-600 hidden sm:inline">{trade.action}</span>
+                    <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg ${ASSET_ICONS[trade.asset]?.color || 'text-gray-600'}`}>
                       {ASSET_ICONS[trade.asset]?.emoji}
                     </span>
-                    <span className="text-sm font-medium">{trade.asset}!</span>
+                    <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">{trade.asset}</span>
                   </div>
-                  <span className="text-xs text-gray-400">{trade.date}</span>
+                  <span className="text-[10px] sm:text-xs xl:text-sm text-gray-400">{trade.date}</span>
                 </div>
-                <div className="ml-6 space-y-1 text-sm text-gray-600">
+                <div className="ml-4 sm:ml-6 xl:ml-8 space-y-1 xl:space-y-2 text-xs sm:text-sm xl:text-base 2xl:text-lg text-gray-600">
                   <p>Price: ${trade.priceFrom.toLocaleString()} → ${trade.priceTo.toLocaleString()}</p>
-                  <p>Quantity: {trade.quantity}</p>
-                  <p>Notional: ${trade.notionalFrom.toLocaleString()} → ${trade.notionalTo.toLocaleString()}</p>
+                  <p>Qty: {trade.quantity} | Notional: ${trade.notionalFrom.toLocaleString()} → ${trade.notionalTo.toLocaleString()}</p>
                   <p>Holding time: {trade.holdingTime}</p>
                 </div>
-                <div className="ml-6 mt-2">
-                  <span className="text-sm font-medium">NET P&L: </span>
-                  <span className={`text-sm font-bold ${trade.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                <div className="ml-4 sm:ml-6 xl:ml-8 mt-2 xl:mt-3">
+                  <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">NET P&L: </span>
+                  <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg font-bold ${trade.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     {trade.pnl >= 0 ? '+' : '-'}${Math.abs(trade.pnl).toFixed(2)}
                   </span>
                 </div>
@@ -274,14 +273,14 @@ export default function TradesDashboard() {
 
         {/* MODELCHAT */}
         {activeTab === 'MODELCHAT' && (
-          <div className="space-y-4">
+          <div className="space-y-4 xl:space-y-6">
             {filteredChat.map((msg) => (
-              <div key={msg.id} className="border-b border-gray-100 pb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-orange-500">{msg.model}</span>
-                  <span className="text-xs text-gray-400">{msg.timestamp}</span>
+              <div key={msg.id} className="border-b border-gray-100 pb-4 xl:pb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 xl:mb-3 gap-1 sm:gap-0">
+                  <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium text-orange-500">{msg.model}</span>
+                  <span className="text-[10px] sm:text-xs xl:text-sm text-gray-400">{msg.timestamp}</span>
                 </div>
-                <p className="text-sm text-gray-600">{msg.message}</p>
+                <p className="text-xs sm:text-sm xl:text-base 2xl:text-lg text-gray-600">{msg.message}</p>
               </div>
             ))}
           </div>
@@ -289,28 +288,28 @@ export default function TradesDashboard() {
 
         {/* POSITIONS */}
         {activeTab === 'POSITIONS' && (
-          <div className="space-y-4">
+          <div className="space-y-4 xl:space-y-6">
             {filteredPositions.map((pos) => (
-              <div key={pos.id} className="border-b border-gray-100 pb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-orange-500">{pos.model}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded ${pos.side === 'LONG' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              <div key={pos.id} className="border-b border-gray-100 pb-4 xl:pb-6">
+                <div className="flex items-center justify-between mb-2 xl:mb-3">
+                  <div className="flex items-center gap-1 sm:gap-2 xl:gap-3 flex-wrap">
+                    <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium text-orange-500">{pos.model}</span>
+                    <span className={`text-[10px] sm:text-xs xl:text-sm px-1.5 sm:px-2 xl:px-3 py-0.5 xl:py-1 rounded ${pos.side === 'LONG' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                       {pos.side}
                     </span>
-                    <span className={`text-sm ${ASSET_ICONS[pos.asset]?.color || 'text-gray-600'}`}>
+                    <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg ${ASSET_ICONS[pos.asset]?.color || 'text-gray-600'}`}>
                       {ASSET_ICONS[pos.asset]?.emoji}
                     </span>
-                    <span className="text-sm font-medium">{pos.asset}</span>
+                    <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">{pos.asset}</span>
                   </div>
                 </div>
-                <div className="ml-6 space-y-1 text-sm text-gray-600">
+                <div className="ml-4 sm:ml-6 xl:ml-8 space-y-1 xl:space-y-2 text-xs sm:text-sm xl:text-base 2xl:text-lg text-gray-600">
                   <p>Entry: ${pos.entryPrice.toLocaleString()} → Current: ${pos.currentPrice.toLocaleString()}</p>
                   <p>Quantity: {pos.quantity}</p>
                 </div>
-                <div className="ml-6 mt-2">
-                  <span className="text-sm font-medium">Unrealized P&L: </span>
-                  <span className={`text-sm font-bold ${pos.unrealizedPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                <div className="ml-4 sm:ml-6 xl:ml-8 mt-2 xl:mt-3">
+                  <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">Unrealized P&L: </span>
+                  <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg font-bold ${pos.unrealizedPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     {pos.unrealizedPnl >= 0 ? '+' : '-'}${Math.abs(pos.unrealizedPnl).toFixed(2)}
                   </span>
                 </div>
@@ -321,27 +320,27 @@ export default function TradesDashboard() {
 
         {/* COMP DETAILS */}
         {activeTab === 'COMP DETAILS' && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto scrollbar-hide">
+            <table className="w-full text-xs sm:text-sm xl:text-base 2xl:text-lg min-w-[500px]">
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Model</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Total Trades</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Win Rate</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Total P&L</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600">Avg Hold Time</th>
+                  <th className="text-left py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6 font-medium text-gray-600">Model</th>
+                  <th className="text-left py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6 font-medium text-gray-600">Trades</th>
+                  <th className="text-left py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6 font-medium text-gray-600">Win Rate</th>
+                  <th className="text-left py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6 font-medium text-gray-600">Total P&L</th>
+                  <th className="text-left py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6 font-medium text-gray-600">Avg Hold</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredComp.map((comp) => (
                   <tr key={comp.model} className="border-b border-gray-100">
-                    <td className="py-3 px-4 font-medium text-orange-500">{comp.model}</td>
-                    <td className="py-3 px-4">{comp.totalTrades}</td>
-                    <td className="py-3 px-4">{comp.winRate}%</td>
-                    <td className={`py-3 px-4 font-medium ${comp.totalPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    <td className="py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6 font-medium text-orange-500">{comp.model}</td>
+                    <td className="py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6">{comp.totalTrades}</td>
+                    <td className="py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6">{comp.winRate}%</td>
+                    <td className={`py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6 font-medium ${comp.totalPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                       {comp.totalPnl >= 0 ? '+' : '-'}${Math.abs(comp.totalPnl).toFixed(2)}
                     </td>
-                    <td className="py-3 px-4">{comp.avgHoldTime}</td>
+                    <td className="py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6">{comp.avgHoldTime}</td>
                   </tr>
                 ))}
               </tbody>

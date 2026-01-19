@@ -27,11 +27,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${instrumentSerif.variable} ${inter.variable} antialiased`}>
+    <html lang="en" className="h-full overflow-hidden">
+      <body className={`${instrumentSerif.variable} ${inter.variable} antialiased h-full flex flex-col overflow-hidden`}>
         <Navbar />
         <AggregateBar />
-        {children}
+        <div className="flex-1 overflow-hidden">
+          {children}
+        </div>
       </body>
     </html>
   );

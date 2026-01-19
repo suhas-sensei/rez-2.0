@@ -37,7 +37,7 @@ function AnimatedPrice({ price, up, changed }: { price: number; up: boolean; cha
   });
 
   return (
-    <span className="text-xs font-medium text-black relative overflow-hidden inline-flex h-4">
+    <span className="text-xs xl:text-sm 2xl:text-base font-medium text-black relative overflow-hidden inline-flex h-4 xl:h-5 2xl:h-6">
       <span
         key={price}
         className={`${isAnimating ? (up ? 'animate-slide-up' : 'animate-slide-down') : ''}`}
@@ -90,18 +90,18 @@ export default function AggregateBar() {
 
   return (
     <div className="bg-white border-b border-gray-200 font-inter">
-      <div className="max-w-[1920px] mx-auto px-8 py-3">
-        <div className="flex items-center justify-end gap-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 py-2 sm:py-3 xl:py-4">
+        <div className="flex items-center justify-start sm:justify-end gap-4 sm:gap-6 xl:gap-8 overflow-x-auto scrollbar-hide">
           {tickers.map((ticker) => (
-            <div key={ticker.symbol} className="flex items-center gap-1.5">
+            <div key={ticker.symbol} className="flex items-center gap-1.5 xl:gap-2 flex-shrink-0">
               <span
-                className={`text-xs transition-all duration-300 ${
+                className={`text-xs xl:text-sm 2xl:text-base transition-all duration-300 ${
                   ticker.up ? 'text-green-500' : 'text-red-500'
                 } ${ticker.changed ? (ticker.up ? 'animate-bounce-up' : 'animate-bounce-down') : ''}`}
               >
                 {ticker.up ? '↑' : '↓'}
               </span>
-              <span className="text-xs text-gray-500">{ticker.symbol}</span>
+              <span className="text-xs xl:text-sm 2xl:text-base text-gray-500">{ticker.symbol}</span>
               <AnimatedPrice price={ticker.price} up={ticker.up} changed={ticker.changed} />
             </div>
           ))}

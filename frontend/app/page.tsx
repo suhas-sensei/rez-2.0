@@ -1,12 +1,15 @@
 'use client';
 
 import TradesDashboard from '@/components/TradesDashboard';
-import Link from 'next/link';
+import LiveChart from '@/components/LiveChart';
+import PortfolioSidebar from '@/components/PortfolioSidebar';
 import { useState, useCallback, useEffect } from 'react';
 
 export default function Home() {
-  const [leftWidth, setLeftWidth] = useState(60);
+  const [leftWidth, setLeftWidth] = useState(75);
   const [isDragging, setIsDragging] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [selectedSymbol, setSelectedSymbol] = useState('ETHUSDT');
 
   const handleMouseDown = () => {
     setIsDragging(true);
@@ -28,6 +31,13 @@ export default function Home() {
   );
 
   useEffect(() => {
+    const checkIsDesktop = () => setIsDesktop(window.innerWidth >= 1024);
+    checkIsDesktop();
+    window.addEventListener('resize', checkIsDesktop);
+    return () => window.removeEventListener('resize', checkIsDesktop);
+  }, []);
+
+  useEffect(() => {
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
@@ -39,52 +49,29 @@ export default function Home() {
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
   return (
-    <main className="min-h-screen bg-white w-full flex">
-      {/* Left Content */}
+    <main className="h-full bg-white w-full flex flex-col lg:flex-row overflow-hidden">
+      {/* Portfolio Sidebar - Hidden on mobile */}
+      <div className="hidden lg:block shrink-0">
+        <PortfolioSidebar
+          selectedSymbol={selectedSymbol}
+          onAssetSelect={setSelectedSymbol}
+        />
+      </div>
+
+      {/* Chart Section */}
       <div
-        className="border-r border-gray-200 p-12 overflow-auto"
-        style={{ width: `${leftWidth}%` }}
+        className="border-b lg:border-b-0 lg:border-r border-gray-200 overflow-hidden w-full lg:w-auto flex flex-col"
+        style={isDesktop ? { width: `calc(${leftWidth}% - 64px)` } : undefined}
       >
-        <div className="max-w-2xl mx-auto space-y-8">
-          <p className="text-lg leading-relaxed">
-            A decade ago, DeepMind revolutionized AI research. Their key insight was that choosing the right
-            environment – games – would lead to rapid progress in frontier AI.
-          </p>
-
-          <p className="text-lg leading-relaxed">
-            At Nof1, we believe financial markets are the best training environment for the next era of AI. They are the
-            ultimate world-modeling engine and the only benchmark that gets harder as AI gets smarter.
-          </p>
-
-          <p className="text-lg leading-relaxed">
-            Instead of games, we&apos;re using markets to train new base models that create their own training data indefinitely.
-            We&apos;re using techniques like open-ended learning and large-scale RL to handle the complexity of markets, the
-            final boss.
-          </p>
-
-          <p className="text-lg leading-relaxed">
-            If this resonates, we&apos;re hiring: engineers, researchers, founders, original thinkers.
-          </p>
-
-          <p className="text-lg leading-relaxed">
-            If you&apos;re excited to build AlphaZero for the real world, get in touch.
-          </p>
-
-          <blockquote className="text-center italic text-lg py-8">
-            &ldquo;Capital allocation is the discipline through which intelligence converges with truth.&rdquo;
-          </blockquote>
-
-          <div className="text-center">
-            <Link href="/waitlist" className="text-lg underline underline-offset-4 hover:text-gray-600">
-              Join the Waitlist
-            </Link>
-          </div>
+        {/* Live Chart */}
+        <div className="w-full h-full">
+          <LiveChart symbol={selectedSymbol} />
         </div>
       </div>
 
-      {/* Resizable Divider */}
+      {/* Resizable Divider - Hidden on mobile */}
       <div
-        className={`w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize transition-colors ${
+        className={`hidden lg:block w-1 shrink-0 bg-gray-200 hover:bg-blue-400 cursor-col-resize transition-colors ${
           isDragging ? 'bg-blue-500' : ''
         }`}
         onMouseDown={handleMouseDown}
@@ -92,8 +79,8 @@ export default function Home() {
 
       {/* Right Dashboard */}
       <div
-        className="overflow-auto"
-        style={{ width: `${100 - leftWidth}%` }}
+        className="overflow-auto scrollbar-hide w-full lg:w-auto flex-1"
+        style={isDesktop ? { width: `${100 - leftWidth}%` } : undefined}
       >
         <TradesDashboard />
       </div>

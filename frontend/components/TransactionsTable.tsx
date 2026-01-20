@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 
-const TABS = ['TRANSACTIONS', 'TOKEN INFO'];
+const TABS = ['TOKEN INFO', 'TRANSACTIONS'];
 
 // Hyperliquid API endpoint
 const HYPERLIQUID_API = 'https://api.hyperliquid.xyz/info';
@@ -245,8 +245,12 @@ const MOCK_TRANSACTIONS: Transaction[] = [
   { id: '8', date: '2m ago', type: 'Buy', usd: 890.45, eth: 0.2765, usdc: 890.45, price: 3220.75, maker: '7G8H9I' },
 ];
 
-export default function TransactionsTable() {
-  const [activeTab, setActiveTab] = useState('TRANSACTIONS');
+interface TransactionsTableProps {
+  coin?: string;
+}
+
+export default function TransactionsTable({ coin = 'ETH' }: TransactionsTableProps) {
+  const [activeTab, setActiveTab] = useState('TOKEN INFO');
   const [tokenInfo, setTokenInfo] = useState<TokenInfo>(DEFAULT_TOKEN_INFO);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -262,18 +266,18 @@ export default function TransactionsTable() {
         const metaData = await metaResponse.json();
         console.log('Hyperliquid Meta:', metaData);
 
-        // Find ETH data (index 1 typically, but search to be safe)
+        // Find coin data (index 1 typically, but search to be safe)
         const assetCtxs = metaData[1] || [];
         const meta = metaData[0]?.universe || [];
-        const ethIndex = meta.findIndex((m: { name: string }) => m.name === 'ETH');
-        const ethCtx = assetCtxs[ethIndex];
+        const coinIndex = meta.findIndex((m: { name: string }) => m.name === coin);
+        const coinCtx = assetCtxs[coinIndex];
 
-        if (ethCtx) {
-          const volume24h = parseFloat(ethCtx.dayNtlVlm || '0');
-          const openInterest = parseFloat(ethCtx.openInterest || '0');
-          const markPx = parseFloat(ethCtx.markPx || '0');
-          const prevDayPx = parseFloat(ethCtx.prevDayPx || '0');
-          const funding = parseFloat(ethCtx.funding || '0') * 100;
+        if (coinCtx) {
+          const volume24h = parseFloat(coinCtx.dayNtlVlm || '0');
+          const openInterest = parseFloat(coinCtx.openInterest || '0');
+          const markPx = parseFloat(coinCtx.markPx || '0');
+          const prevDayPx = parseFloat(coinCtx.prevDayPx || '0');
+          const funding = parseFloat(coinCtx.funding || '0') * 100;
 
           // Calculate price changes using candle data
           const now = Date.now();
@@ -290,7 +294,7 @@ export default function TransactionsTable() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               type: 'candleSnapshot',
-              req: { coin: 'ETH', interval: '1h', startTime: now - 25 * 60 * 60 * 1000, endTime: now },
+              req: { coin: coin, interval: '1h', startTime: now - 25 * 60 * 60 * 1000, endTime: now },
             }),
           });
           const candles = await candleResponse.json();
@@ -398,7 +402,7 @@ export default function TransactionsTable() {
     // Refresh every 10 seconds
     const interval = setInterval(fetchHyperliquidData, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [coin]);
 
   // Update countdown every second
   useEffect(() => {

@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Instrument_Serif, Inter } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
-import AggregateBar from "@/components/AggregateBar";
 
 const instrumentSerif = Instrument_Serif({
   weight: ["400"],
@@ -28,12 +26,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full overflow-hidden">
-      <body className={`${instrumentSerif.variable} ${inter.variable} antialiased h-full flex flex-col overflow-hidden`}>
-        <Navbar />
-        <AggregateBar />
-        <div className="flex-1 overflow-hidden">
-          {children}
-        </div>
+      <body className={`${instrumentSerif.variable} ${inter.variable} antialiased h-full overflow-hidden`}>
+        {children}
       </body>
     </html>
   );

@@ -3,13 +3,21 @@
 import TradesDashboard from '@/components/TradesDashboard';
 import LiveChart from '@/components/LiveChart';
 import PortfolioSidebar from '@/components/PortfolioSidebar';
+import HomeHero from '@/components/HomeHero';
+import Navbar from '@/components/Navbar';
+import AggregateBar from '@/components/AggregateBar';
 import { useState, useCallback, useEffect } from 'react';
 
 export default function Home() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [leftWidth, setLeftWidth] = useState(75);
   const [isDragging, setIsDragging] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState('ETHUSDT');
+
+  const handleLogin = () => {
+    setIsLoggedIn(true);
+  };
 
   const handleMouseDown = () => {
     setIsDragging(true);
@@ -48,9 +56,18 @@ export default function Home() {
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
+  // Show landing page if not logged in
+  if (!isLoggedIn) {
+    return <HomeHero onLogin={handleLogin} />;
+  }
+
+  // Show markets dashboard if logged in
   return (
-    <main className="h-full bg-white w-full flex flex-col lg:flex-row overflow-hidden">
-      {/* Portfolio Sidebar - Hidden on mobile */}
+    <div className="h-full flex flex-col overflow-hidden">
+      <Navbar />
+      <AggregateBar />
+      <main className="flex-1 bg-white w-full flex flex-col lg:flex-row overflow-hidden">
+        {/* Portfolio Sidebar - Hidden on mobile */}
       <div className="hidden lg:block shrink-0">
         <PortfolioSidebar
           selectedSymbol={selectedSymbol}
@@ -85,8 +102,9 @@ export default function Home() {
         <TradesDashboard />
       </div>
 
-      {/* Overlay to prevent selection while dragging */}
-      {isDragging && <div className="fixed inset-0 cursor-col-resize z-50" />}
-    </main>
+        {/* Overlay to prevent selection while dragging */}
+        {isDragging && <div className="fixed inset-0 cursor-col-resize z-50" />}
+      </main>
+    </div>
   );
 }

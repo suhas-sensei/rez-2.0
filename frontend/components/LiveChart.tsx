@@ -25,6 +25,7 @@ const CIRCULATING_SUPPLY: Record<string, number> = {
   XRPUSDT: 54_000_000_000,
   ADAUSDT: 35_000_000_000,
   DOGEUSDT: 143_000_000_000,
+  AVAXUSDT: 410_000_000,
 };
 
 // Map display symbols to Hyperliquid coin names
@@ -36,6 +37,7 @@ const SYMBOL_TO_COIN: Record<string, string> = {
   XRPUSDT: 'XRP',
   ADAUSDT: 'ADA',
   DOGEUSDT: 'DOGE',
+  AVAXUSDT: 'AVAX',
 };
 
 // Map Hyperliquid intervals to API format
@@ -544,7 +546,7 @@ export default function LiveChart({ symbol = 'ETHUSDT' }: LiveChartProps) {
         className="w-full overflow-hidden"
         style={{ height: `${100 - chartHeight}%` }}
       >
-        <TransactionsTable />
+        <TransactionsTable coin={coin} />
       </div>
 
       {/* Overlay to prevent selection while dragging */}

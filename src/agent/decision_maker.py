@@ -48,7 +48,31 @@ class TradingAgent:
         """Dispatch decision request to the LLM and enforce output contract."""
 
         # Risk-profile specific guidance
-        if self.risk_profile == "high":
+        if self.risk_profile == "debug":
+            risk_guidance = (
+                "RISK PROFILE: DEBUG - AGGRESSIVE TESTING MODE (MAXIMUM TRADE FREQUENCY)\n"
+                "⚠️⚠️⚠️ THIS IS DEBUG MODE - TRADE AS MUCH AS POSSIBLE ⚠️⚠️⚠️\n\n"
+                "YOUR ONLY GOAL: Generate MAXIMUM trade activity for UI stress testing.\n\n"
+                "ABSOLUTE RULES - NO EXCEPTIONS:\n"
+                "1. NEVER HOLD - Holding is FORBIDDEN. Every asset MUST have action='buy' or action='sell'.\n"
+                "2. ALWAYS TRADE - If you have NO position, open one (random buy/sell).\n"
+                "3. ALWAYS FLIP - If you HAVE a position, CLOSE IT and open the opposite direction.\n"
+                "   Example: Have LONG? -> action='sell' to close. Next cycle -> action='buy' or 'sell' randomly.\n"
+                "4. ALLOCATION: Exactly $12-13 USD per trade (above exchange minimum).\n"
+                "5. ULTRA-TIGHT TP/SL: Set TP at 0.5% profit, SL at 1% loss (closes in seconds).\n"
+                "6. IGNORE EVERYTHING: Indicators, trends, funding, momentum - ALL IRRELEVANT.\n"
+                "7. TRADE EVERY ASSET: Each asset in the list MUST have a trade action, not hold.\n\n"
+                "TP/SL CALCULATION:\n"
+                "- For BUY (long): TP = entry_price * 1.005, SL = entry_price * 0.99\n"
+                "- For SELL (short): TP = entry_price * 0.995, SL = entry_price * 1.01\n\n"
+                "OUTPUT FORMAT:\n"
+                "- exit_plan: 'Debug trade - closes on tight TP/SL'\n"
+                "- rationale: 'Debug/test trade - random [buy/sell] for UI testing'\n"
+                "- summary: Keep it short like 'Debug: flipping to long ETH, short BTC for testing.'\n\n"
+                "REMEMBER: We need CONSTANT trade activity. Trades should open and close rapidly.\n"
+                "If you output 'hold' for ANY asset, you have FAILED the debug test.\n\n"
+            )
+        elif self.risk_profile == "high":
             risk_guidance = (
                 "RISK PROFILE: HIGH - AGGRESSIVE TRADING MODE\n"
                 "- TAKE TRADES FREQUENTLY - Don't wait for perfect setups. Trade on moderate signals.\n"
@@ -117,8 +141,12 @@ class TradingAgent:
             "- Structure (trend, EMAs slope/cross, HH/HL vs LH/LL), Momentum (MACD regime, RSI slope), Liquidity/volatility (ATR, volume), Positioning tilt (funding, OI).\n"
             "- Favor alignment across 4h and 5m. Counter-trend scalps require stronger intraday confirmation and tighter risk.\n\n"
             "Output contract\n"
-            "- Output a STRICT JSON object with exactly two properties in this order:\n"
-            "  • reasoning: long-form string capturing detailed, step-by-step analysis that means you can acknowledge existing information as clarity, or acknowledge that you need more information to make a decision (be verbose).\n"
+            "- Output a STRICT JSON object with exactly three properties in this order:\n"
+            "  • reasoning: long-form string capturing detailed, step-by-step analysis (be verbose, for internal use).\n"
+            "  • summary: A SHORT (2-4 sentences) first-person conversational summary of your decision. Write like a human trader talking about their positions. Examples:\n"
+            "    - \"I'm holding my BTC position - the bearish momentum hasn't reversed yet and I don't see a clear entry signal.\"\n"
+            "    - \"I'm adding to my ETH long here. The RSI divergence looks bullish and funding is favorable for longs.\"\n"
+            "    - \"Closing my short on BTC - the oversold RSI suggests a bounce is coming and I don't want to fight the trend.\"\n"
             "  • trade_decisions: array ordered to match the provided assets list.\n"
             "- Each item inside trade_decisions must contain the keys {asset, action, allocation_usd, tp_price, sl_price, exit_plan, rationale}.\n"
             "- Do not emit Markdown or any extra properties.\n"
@@ -180,12 +208,13 @@ class TradingAgent:
             return resp.json()
 
         def _sanitize_output(raw_content: str, assets_list):
-            """Coerce arbitrary LLM output into the required reasoning + decisions schema."""
+            """Coerce arbitrary LLM output into the required reasoning + summary + decisions schema."""
             try:
                 schema = {
                     "type": "object",
                     "properties": {
                         "reasoning": {"type": "string"},
+                        "summary": {"type": "string"},
                         "trade_decisions": {
                             "type": "array",
                             "items": {
@@ -205,7 +234,7 @@ class TradingAgent:
                             "minItems": 1,
                         }
                     },
-                    "required": ["reasoning", "trade_decisions"],
+                    "required": ["reasoning", "summary", "trade_decisions"],
                     "additionalProperties": False,
                 }
                 payload = {
@@ -241,10 +270,10 @@ class TradingAgent:
                         return loaded
                 except (json.JSONDecodeError, KeyError, ValueError, TypeError):
                     pass
-                return {"reasoning": "", "trade_decisions": []}
+                return {"reasoning": "", "summary": "", "trade_decisions": []}
             except (requests.RequestException, json.JSONDecodeError, KeyError, ValueError, TypeError) as se:
                 logging.error("Sanitize failed: %s", se)
-                return {"reasoning": "", "trade_decisions": []}
+                return {"reasoning": "", "summary": "", "trade_decisions": []}
 
         allow_tools = True
         allow_structured = True
@@ -265,6 +294,7 @@ class TradingAgent:
                 "type": "object",
                 "properties": {
                     "reasoning": {"type": "string"},
+                    "summary": {"type": "string"},
                     "trade_decisions": {
                         "type": "array",
                         "items": {
@@ -276,7 +306,7 @@ class TradingAgent:
                         "minItems": 1,
                     }
                 },
-                "required": ["reasoning", "trade_decisions"],
+                "required": ["reasoning", "summary", "trade_decisions"],
                 "additionalProperties": False,
             }
 
@@ -380,9 +410,10 @@ class TradingAgent:
                     sanitized = _sanitize_output(content if 'content' in locals() else json.dumps(parsed), assets)
                     if sanitized.get("trade_decisions"):
                         return sanitized
-                    return {"reasoning": "", "trade_decisions": []}
+                    return {"reasoning": "", "summary": "", "trade_decisions": []}
 
                 reasoning_text = parsed.get("reasoning", "") or ""
+                summary_text = parsed.get("summary", "") or ""
                 decisions = parsed.get("trade_decisions")
 
                 if isinstance(decisions, list):
@@ -405,13 +436,13 @@ class TradingAgent:
                                 "exit_plan": item[5] if len(item) > 5 else "",
                                 "rationale": item[6] if len(item) > 6 else ""
                             })
-                    return {"reasoning": reasoning_text, "trade_decisions": normalized}
+                    return {"reasoning": reasoning_text, "summary": summary_text, "trade_decisions": normalized}
 
                 logging.error("trade_decisions missing or invalid; attempting sanitize")
                 sanitized = _sanitize_output(content if 'content' in locals() else json.dumps(parsed), assets)
                 if sanitized.get("trade_decisions"):
                     return sanitized
-                return {"reasoning": reasoning_text, "trade_decisions": []}
+                return {"reasoning": reasoning_text, "summary": summary_text, "trade_decisions": []}
             except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
                 logging.error("JSON parse error: %s, content: %s", e, content[:200])
                 # Try sanitizer as last resort
@@ -420,6 +451,7 @@ class TradingAgent:
                     return sanitized
                 return {
                     "reasoning": "Parse error",
+                    "summary": "Having trouble processing the market data. Staying flat until next cycle.",
                     "trade_decisions": [{
                         "asset": a,
                         "action": "hold",
@@ -433,6 +465,7 @@ class TradingAgent:
 
         return {
             "reasoning": "tool loop cap",
+            "summary": "Analysis taking too long. Staying flat until next cycle.",
             "trade_decisions": [{
                 "asset": a,
                 "action": "hold",

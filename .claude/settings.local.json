@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(npm install:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(node -e:*)",
+      "Bash(curl:*)",
+      "Bash(ls:*)",
+      "Bash(pgrep:*)",
+      "Bash(pkill:*)",
+      "Bash(python3:*)"
     ]
   }
 }

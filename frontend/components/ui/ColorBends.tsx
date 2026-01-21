@@ -200,12 +200,12 @@ const ColorBends = ({
 
     handleResize()
 
-    if ("ResizeObserver" in window) {
+    if (typeof ResizeObserver !== 'undefined') {
       const ro = new ResizeObserver(handleResize)
       ro.observe(container)
       resizeObserverRef.current = ro
     } else {
-      window.addEventListener("resize", handleResize)
+      globalThis.window?.addEventListener("resize", handleResize)
     }
 
     const loop = () => {
@@ -233,7 +233,7 @@ const ColorBends = ({
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
       if (resizeObserverRef.current) resizeObserverRef.current.disconnect()
-      else window.removeEventListener("resize", handleResize)
+      else globalThis.window?.removeEventListener("resize", handleResize)
       geometry.dispose()
       material.dispose()
       renderer.dispose()

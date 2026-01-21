@@ -75,6 +75,8 @@ CONFIG = {
     # Hyperliquid network/base URL overrides
     "hyperliquid_base_url": _get_env("HYPERLIQUID_BASE_URL"),
     "hyperliquid_network": _get_env("HYPERLIQUID_NETWORK", "mainnet"),
+    # Main account address (for API wallet setups where private key is different from account)
+    "hyperliquid_account_address": _get_env("HYPERLIQUID_ACCOUNT_ADDRESS"),
     # LLM configuration
     "llm_provider": _get_env("LLM_PROVIDER", "openai"),  # openai or openrouter
     "openai_api_key": _get_env("OPENAI_API_KEY"),

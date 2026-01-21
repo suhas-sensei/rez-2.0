@@ -1,10 +1,11 @@
 'use client';
 
 const ASSETS = [
-  { symbol: 'ETH', binanceSymbol: 'ETHUSDT' },
-  { symbol: 'BTC', binanceSymbol: 'BTCUSDT' },
-  { symbol: 'SOL', binanceSymbol: 'SOLUSDT' },
-  { symbol: 'AVAX', binanceSymbol: 'AVAXUSDT' },
+  { symbol: 'PORTFOLIO', binanceSymbol: 'PORTFOLIO', isPortfolio: true },
+  { symbol: 'ETH', binanceSymbol: 'ETHUSDT', isPortfolio: false },
+  { symbol: 'BTC', binanceSymbol: 'BTCUSDT', isPortfolio: false },
+  { symbol: 'SOL', binanceSymbol: 'SOLUSDT', isPortfolio: false },
+  { symbol: 'AVAX', binanceSymbol: 'AVAXUSDT', isPortfolio: false },
 ];
 
 interface PortfolioSidebarProps {
@@ -15,23 +16,15 @@ interface PortfolioSidebarProps {
 export default function PortfolioSidebar({ selectedSymbol, onAssetSelect }: PortfolioSidebarProps) {
   return (
     <div className="h-full bg-white border-r border-gray-200 flex flex-col w-14 xl:w-16 2xl:w-20 font-inter">
-      {/* Portfolio Header */}
-      <div className="py-6 xl:py-8 flex justify-center border-b border-gray-200">
-        <span
-          className="text-xs xl:text-sm 2xl:text-base font-semibold text-gray-500 tracking-wider"
-          style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-        >
-          PORTFOLIO
-        </span>
-      </div>
-
       {/* Assets List */}
       <div className="flex-1 flex flex-col">
-        {ASSETS.map((asset) => (
+        {ASSETS.map((asset, index) => (
           <button
             key={asset.symbol}
             onClick={() => onAssetSelect(asset.binanceSymbol)}
-            className={`relative py-8 xl:py-10 2xl:py-12 flex items-center justify-center border-b border-gray-200 transition-colors ${
+            className={`relative py-6 xl:py-8 2xl:py-10 flex items-center justify-center transition-colors ${
+              index < ASSETS.length - 1 ? 'border-b border-gray-200' : ''
+            } ${
               selectedSymbol === asset.binanceSymbol ? 'bg-gray-50' : 'hover:bg-gray-50'
             }`}
           >
@@ -42,7 +35,7 @@ export default function PortfolioSidebar({ selectedSymbol, onAssetSelect }: Port
 
             {/* Asset label */}
             <span
-              className={`text-sm xl:text-base 2xl:text-lg font-semibold ${
+              className={`text-xs xl:text-sm 2xl:text-base font-semibold ${
                 selectedSymbol === asset.binanceSymbol ? 'text-orange-500' : 'text-gray-700'
               }`}
               style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}

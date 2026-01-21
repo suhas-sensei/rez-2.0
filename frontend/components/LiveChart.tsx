@@ -348,8 +348,12 @@ export default function LiveChart({ symbol = 'ETHUSDT' }: LiveChartProps) {
       }
     };
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+    ws.onerror = () => {
+      // WebSocket errors don't contain useful info, connection will auto-retry on close
+    };
+
+    ws.onclose = () => {
+      // WebSocket closed - will reconnect on next render cycle
     };
 
     return () => {

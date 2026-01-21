@@ -46,7 +46,7 @@ def main():
     parser = argparse.ArgumentParser(description="LLM-based Trading Agent on Hyperliquid")
     parser.add_argument("--assets", type=str, nargs="+", required=False, help="Assets to trade, e.g., BTC ETH")
     parser.add_argument("--interval", type=str, required=False, help="Interval period, e.g., 1h")
-    parser.add_argument("--risk-profile", type=str, choices=["conservative", "moderate", "high"], required=False, help="Risk profile: conservative (default), moderate, or high")
+    parser.add_argument("--risk-profile", type=str, choices=["conservative", "moderate", "high", "debug"], required=False, help="Risk profile: conservative (default), moderate, high, or debug (for testing)")
     args = parser.parse_args()
 
     # Allow assets/interval/risk-profile via .env (CONFIG) if CLI not provided
@@ -87,7 +87,13 @@ def main():
     just_traded_assets = set()
 
     print(f"Starting trading agent for assets: {args.assets} at interval: {args.interval}")
-    print(f"Risk Profile: {args.risk_profile.upper()} - {'AGGRESSIVE TRADING MODE' if args.risk_profile == 'high' else 'Balanced trading' if args.risk_profile == 'moderate' else 'Conservative trading'}")
+    profile_desc = {
+        'debug': '⚠️ DEBUG MODE - Random frequent trades for testing',
+        'high': 'AGGRESSIVE TRADING MODE',
+        'moderate': 'Balanced trading',
+        'conservative': 'Conservative trading'
+    }
+    print(f"Risk Profile: {args.risk_profile.upper()} - {profile_desc.get(args.risk_profile, 'Unknown')}")
 
     def add_event(msg: str):
         """Log an informational event and push it into the recent events deque."""
@@ -362,9 +368,9 @@ def main():
                     add_event(f"Retry traceback: {traceback.format_exc()}")
                     outputs = {}
 
-            reasoning_text = outputs.get("reasoning", "") if isinstance(outputs, dict) else ""
-            if reasoning_text:
-                add_event(f"LLM reasoning summary: {reasoning_text}")
+            summary_text = outputs.get("summary", "") if isinstance(outputs, dict) else ""
+            if summary_text:
+                add_event(f"LLM reasoning summary: {summary_text}")
 
             # Execute trades for each asset
             for output in outputs.get("trade_decisions", []) if isinstance(outputs, dict) else []:
@@ -384,6 +390,10 @@ def main():
                         if alloc_usd <= 0:
                             add_event(f"Holding {asset}: zero/negative allocation")
                             continue
+                        # Ensure minimum order value of $12 to avoid exchange rejection ($10 minimum)
+                        if alloc_usd < 12:
+                            alloc_usd = 12.0
+                            add_event(f"Bumped allocation to ${alloc_usd} to meet exchange minimum")
 
                         # Check if we have an existing position
                         existing_position = None
@@ -556,20 +566,137 @@ def main():
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
 
+    async def handle_close_all(request):
+        """Close all open positions in parallel using market orders."""
+        try:
+            state = await hyperliquid.get_user_state()
+            positions = state.get('positions', [])
+
+            # Filter to positions with actual size
+            active_positions = [p for p in positions if float(p.get('szi', 0)) != 0]
+
+            if not active_positions:
+                return web.json_response({"success": True, "message": "No positions to close", "closed": 0})
+
+            async def close_position(pos):
+                """Close a single position using opposite market order."""
+                coin = pos.get('coin')
+                size = float(pos.get('szi', 0))
+                is_long = size > 0
+                close_size = abs(size)
+                try:
+                    # Close by placing opposite direction market order
+                    if is_long:
+                        result = await hyperliquid.place_sell_order(coin, close_size, slippage=0.05)
+                    else:
+                        result = await hyperliquid.place_buy_order(coin, close_size, slippage=0.05)
+                    add_event(f"Closed {coin} position: {'LONG' if is_long else 'SHORT'} {close_size}")
+                    return {"coin": coin, "size": close_size, "success": True, "result": str(result)}
+                except Exception as e:
+                    add_event(f"Failed to close {coin}: {e}")
+                    return {"coin": coin, "size": close_size, "success": False, "error": str(e)}
+
+            # Close all positions in parallel
+            results = await asyncio.gather(*[close_position(p) for p in active_positions])
+
+            closed = [r for r in results if r.get("success")]
+            errors = [r for r in results if not r.get("success")]
+
+            return web.json_response({
+                "success": len(errors) == 0,
+                "closed": len(closed),
+                "positions_closed": closed,
+                "errors": errors
+            })
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def handle_close_position(request):
+        """Close a single position by asset."""
+        try:
+            data = await request.json()
+            asset = data.get('asset')
+            side = data.get('side')
+            size = float(data.get('size', 0))
+
+            if not asset or not size:
+                return web.json_response({"error": "Missing asset or size"}, status=400)
+
+            # Get the coin symbol
+            coin = asset.upper()
+
+            # Determine if this is a long or short position
+            is_long = side.upper() == 'LONG' if side else size > 0
+            close_size = abs(size)
+
+            try:
+                # Close by placing opposite direction market order
+                if is_long:
+                    result = await hyperliquid.place_sell_order(coin, close_size, slippage=0.05)
+                else:
+                    result = await hyperliquid.place_buy_order(coin, close_size, slippage=0.05)
+                add_event(f"Closed {coin} position: {'LONG' if is_long else 'SHORT'} {close_size}")
+                return web.json_response({
+                    "success": True,
+                    "coin": coin,
+                    "size": close_size,
+                    "side": 'LONG' if is_long else 'SHORT',
+                    "result": str(result)
+                })
+            except Exception as e:
+                add_event(f"Failed to close {coin}: {e}")
+                return web.json_response({"success": False, "error": str(e)}, status=500)
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
     async def start_api(app):
         """Register HTTP endpoints for observing diary entries and logs."""
         app.router.add_get('/diary', handle_diary)
         app.router.add_get('/logs', handle_logs)
+        app.router.add_post('/close-all', handle_close_all)
+        app.router.add_post('/close-position', handle_close_position)
 
     async def main_async():
         """Start the aiohttp server and kick off the trading loop."""
+        import socket
+        import subprocess
+
+        from src.config_loader import CONFIG as CFG
+        port = int(CFG.get("api_port"))
+        host = CFG.get("api_host")
+
+        # Kill any existing process on this port
+        try:
+            result = subprocess.run(
+                ["lsof", "-t", f"-i:{port}"],
+                capture_output=True, text=True
+            )
+            if result.stdout.strip():
+                pids = result.stdout.strip().split('\n')
+                for pid in pids:
+                    if pid:
+                        subprocess.run(["kill", "-9", pid], capture_output=True)
+                        logging.info(f"Killed existing process {pid} on port {port}")
+                import time
+                time.sleep(1)
+        except Exception as e:
+            logging.warning(f"Could not check/kill existing process: {e}")
+
         app = web.Application()
         await start_api(app)
-        from src.config_loader import CONFIG as CFG
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, CFG.get("api_host"), int(CFG.get("api_port")))
+
+        # Create socket with SO_REUSEADDR to allow quick restart
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((host, port))
+        sock.listen(128)
+        sock.setblocking(False)
+
+        site = web.SockSite(runner, sock)
         await site.start()
+        logging.info(f"API server started on {host}:{port}")
         await run_loop()
 
     def calculate_total_return(state, trade_log):

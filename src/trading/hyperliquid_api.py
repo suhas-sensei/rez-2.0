@@ -54,6 +54,9 @@ class HyperliquidAPI:
             self.wallet = Account.from_mnemonic(CONFIG["mnemonic"])
         else:
             raise ValueError("Either HYPERLIQUID_PRIVATE_KEY/LIGHTER_PRIVATE_KEY or MNEMONIC must be provided")
+        # Account address for queries (may differ from wallet if using API wallet)
+        # If not specified, use the wallet address
+        self.account_address = CONFIG.get("hyperliquid_account_address") or self.wallet.address
         # Choose base URL: allow override via env-config; fallback to network selection
         network = (CONFIG.get("hyperliquid_network") or "mainnet").lower()
         base_url = CONFIG.get("hyperliquid_base_url")
@@ -171,6 +174,18 @@ class HyperliquidAPI:
         amount = self.round_size(asset, amount)
         return await self._retry(lambda: self.exchange.market_open(asset, False, amount, None, slippage))
 
+    async def market_close(self, asset, slippage=0.05):
+        """Close an entire position for an asset using market order.
+
+        Args:
+            asset: Market symbol to close.
+            slippage: Maximum acceptable slippage (default 5% for reliable closes).
+
+        Returns:
+            Raw SDK response from :meth:`Exchange.market_close`.
+        """
+        return await self._retry(lambda: self.exchange.market_close(asset, None, slippage))
+
     async def place_take_profit(self, asset, is_buy, amount, tp_price):
         """Create a reduce-only trigger order that executes a take-profit exit.
 
@@ -220,7 +235,7 @@ class HyperliquidAPI:
     async def cancel_all_orders(self, asset):
         """Cancel every open order for ``asset`` owned by the configured wallet."""
         try:
-            open_orders = await self._retry(lambda: self.info.frontend_open_orders(self.wallet.address))
+            open_orders = await self._retry(lambda: self.info.frontend_open_orders(self.account_address))
             for order in open_orders:
                 if order.get("coin") == asset:
                     oid = order.get("oid")
@@ -238,7 +253,7 @@ class HyperliquidAPI:
             List of order dictionaries augmented with ``triggerPx`` when present.
         """
         try:
-            orders = await self._retry(lambda: self.info.frontend_open_orders(self.wallet.address))
+            orders = await self._retry(lambda: self.info.frontend_open_orders(self.account_address))
             # Normalize trigger price if present in orderType
             for o in orders:
                 try:
@@ -266,9 +281,9 @@ class HyperliquidAPI:
         try:
             # Some SDK versions expose user_fills; fall back gracefully if absent
             if hasattr(self.info, 'user_fills'):
-                fills = await self._retry(lambda: self.info.user_fills(self.wallet.address))
+                fills = await self._retry(lambda: self.info.user_fills(self.account_address))
             elif hasattr(self.info, 'fills'):
-                fills = await self._retry(lambda: self.info.fills(self.wallet.address))
+                fills = await self._retry(lambda: self.info.fills(self.account_address))
             else:
                 return []
             if isinstance(fills, list):
@@ -305,7 +320,7 @@ class HyperliquidAPI:
         Returns:
             Dictionary with ``balance``, ``total_value``, and ``positions``.
         """
-        state = await self._retry(lambda: self.info.user_state(self.wallet.address))
+        state = await self._retry(lambda: self.info.user_state(self.account_address))
         positions = state.get("assetPositions", [])
         total_value = float(state.get("accountValue", 0.0))
         enriched_positions = []

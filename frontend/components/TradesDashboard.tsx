@@ -2,31 +2,19 @@
 
 import { useState } from 'react';
 
-const TABS = ['COMPLETED TRADES', 'MODELCHAT', 'POSITIONS', 'COMP DETAILS'];
-
-const MODELS = [
-  'ALL MODELS',
-  'qwen3-max',
-  'grok-4.20',
-  'claude-4-opus',
-  'gpt-5-turbo',
-  'gemini-2-ultra',
-];
+const TABS = ['MODELCHAT', 'POSITIONS', 'COMPLETED TRADES', 'AGENT STATS'];
 
 const ASSET_ICONS: Record<string, { emoji: string; color: string }> = {
-  NVDA: { emoji: '◉', color: 'text-green-500' },
-  MSFT: { emoji: '■', color: 'text-red-500' },
-  TSLA: { emoji: '↑', color: 'text-purple-500' },
-  NDX: { emoji: '📈', color: 'text-blue-500' },
   BTC: { emoji: '₿', color: 'text-orange-500' },
   ETH: { emoji: '◆', color: 'text-blue-400' },
   SOL: { emoji: '◎', color: 'text-purple-400' },
+  AVAX: { emoji: '▲', color: 'text-red-400' },
+  DOGE: { emoji: 'Ð', color: 'text-yellow-500' },
+  STRK: { emoji: '⚡', color: 'text-purple-500' },
 };
 
-interface Trade {
-  id: number;
-  model: string;
-  prevModel: string;
+export interface Trade {
+  id: number | string;
   asset: string;
   action: string;
   date: string;
@@ -39,155 +27,138 @@ interface Trade {
   pnl: number;
 }
 
-const COMPLETED_TRADES: Trade[] = [
-  {
-    id: 1,
-    model: 'qwen3-max',
-    prevModel: '',
-    asset: 'NVDA',
-    action: 'completed a trade on',
-    date: '12/12, 11:25 PM',
-    priceFrom: 180.05,
-    priceTo: 176.97,
-    quantity: 9.65,
-    notionalFrom: 1737,
-    notionalTo: 1708,
-    holdingTime: '17H 46M',
-    pnl: -29.70,
-  },
-  {
-    id: 2,
-    model: 'qwen3-max',
-    prevModel: '',
-    asset: 'MSFT',
-    action: 'completed a trade on',
-    date: '12/12, 11:25 PM',
-    priceFrom: 478.37,
-    priceTo: 477.92,
-    quantity: 3.25,
-    notionalFrom: 1555,
-    notionalTo: 1553,
-    holdingTime: '25H 56M',
-    pnl: -1.45,
-  },
-  {
-    id: 3,
-    model: 'grok-4.20',
-    prevModel: 'mystery-model',
-    asset: 'TSLA',
-    action: 'completed a trade on',
-    date: '12/12, 11:24 PM',
-    priceFrom: 446.21,
-    priceTo: 451.11,
-    quantity: -1.12,
-    notionalFrom: 499.76,
-    notionalTo: 505.24,
-    holdingTime: '32H 53M',
-    pnl: -5.49,
-  },
-  {
-    id: 4,
-    model: 'grok-4.20',
-    prevModel: 'mystery-model',
-    asset: 'MSFT',
-    action: 'completed a trade on',
-    date: '12/12, 11:24 PM',
-    priceFrom: 483.04,
-    priceTo: 477.92,
-    quantity: 86.55,
-    notionalFrom: 41807,
-    notionalTo: 41364,
-    holdingTime: '17H 18M',
-    pnl: -442.85,
-  },
-  {
-    id: 5,
-    model: 'grok-4.20',
-    prevModel: 'mystery-model',
-    asset: 'NDX',
-    action: 'completed a trade on',
-    date: '12/12, 11:24 PM',
-    priceFrom: 25627.64,
-    priceTo: 25260,
-    quantity: 1.68,
-    notionalFrom: 43054,
-    notionalTo: 42437,
-    holdingTime: '19H 23M',
-    pnl: -617.00,
-  },
-];
-
-interface Position {
-  id: number;
-  model: string;
+export interface Position {
+  id: number | string;
   asset: string;
   side: 'LONG' | 'SHORT';
   entryPrice: number;
   currentPrice: number;
   quantity: number;
+  leverage?: number;
   unrealizedPnl: number;
+  liquidationPrice?: number;
 }
 
-const POSITIONS: Position[] = [
-  { id: 1, model: 'qwen3-max', asset: 'BTC', side: 'LONG', entryPrice: 94500, currentPrice: 94892, quantity: 0.5, unrealizedPnl: 196.00 },
-  { id: 2, model: 'grok-4.20', asset: 'ETH', side: 'SHORT', entryPrice: 3320, currentPrice: 3286, quantity: 2.0, unrealizedPnl: 68.00 },
-  { id: 3, model: 'claude-4-opus', asset: 'SOL', side: 'LONG', entryPrice: 140, currentPrice: 143.39, quantity: 10, unrealizedPnl: 33.90 },
-];
-
-interface ChatMessage {
-  id: number;
-  model: string;
+export interface AgentMessage {
+  id: number | string;
+  type: 'decision' | 'info' | 'trade' | 'error';
   message: string;
   timestamp: string;
+  asset?: string;
 }
 
-const MODELCHAT: ChatMessage[] = [
-  { id: 1, model: 'qwen3-max', message: 'Entered LONG on NVDA based on momentum indicators', timestamp: '12/12, 11:20 PM' },
-  { id: 2, model: 'grok-4.20', message: 'Closed TSLA position, taking small loss due to reversal', timestamp: '12/12, 11:24 PM' },
-  { id: 3, model: 'claude-4-opus', message: 'Market showing bearish divergence on BTC 4H chart', timestamp: '12/12, 11:15 PM' },
-  { id: 4, model: 'gpt-5-turbo', message: 'Waiting for confirmation before entering ETH trade', timestamp: '12/12, 11:10 PM' },
-];
-
-interface CompDetail {
-  model: string;
+export interface AgentStats {
   totalTrades: number;
   winRate: number;
   totalPnl: number;
   avgHoldTime: string;
+  sharpeRatio?: number;
+  maxDrawdown?: number;
 }
 
-const COMP_DETAILS: CompDetail[] = [
-  { model: 'qwen3-max', totalTrades: 156, winRate: 58.3, totalPnl: 2450.32, avgHoldTime: '18H 30M' },
-  { model: 'grok-4.20', totalTrades: 203, winRate: 52.1, totalPnl: -1065.34, avgHoldTime: '24H 15M' },
-  { model: 'claude-4-opus', totalTrades: 89, winRate: 64.0, totalPnl: 3210.50, avgHoldTime: '12H 45M' },
-  { model: 'gpt-5-turbo', totalTrades: 178, winRate: 55.6, totalPnl: 890.21, avgHoldTime: '20H 10M' },
-  { model: 'gemini-2-ultra', totalTrades: 134, winRate: 49.2, totalPnl: -456.78, avgHoldTime: '28H 05M' },
+interface TradesDashboardProps {
+  trades?: Trade[];
+  positions?: Position[];
+  messages?: AgentMessage[];
+  stats?: AgentStats;
+  isAgentRunning?: boolean;
+}
+
+// Default placeholder data
+const DEFAULT_MESSAGES: AgentMessage[] = [
+  { id: 1, type: 'info', message: 'Agent initialized. Waiting for market data...', timestamp: new Date().toLocaleString() },
 ];
 
-export default function TradesDashboard() {
-  const [activeTab, setActiveTab] = useState('COMPLETED TRADES');
-  const [selectedModel, setSelectedModel] = useState('ALL MODELS');
+export default function TradesDashboard({
+  trades = [],
+  positions = [],
+  messages = DEFAULT_MESSAGES,
+  stats,
+  isAgentRunning = false,
+}: TradesDashboardProps) {
+  const [activeTab, setActiveTab] = useState('MODELCHAT');
+  const [isClosingPositions, setIsClosingPositions] = useState(false);
+  const [closingPositionId, setClosingPositionId] = useState<string | number | null>(null);
+  const [closeError, setCloseError] = useState<string | null>(null);
 
-  const filteredTrades = selectedModel === 'ALL MODELS'
-    ? COMPLETED_TRADES
-    : COMPLETED_TRADES.filter(t => t.model === selectedModel);
+  const handleCloseAllPositions = async () => {
+    if (positions.length === 0) return;
 
-  const filteredPositions = selectedModel === 'ALL MODELS'
-    ? POSITIONS
-    : POSITIONS.filter(p => p.model === selectedModel);
+    const confirmed = window.confirm(
+      `Are you sure you want to close all ${positions.length} position(s)? This will market sell/buy to close.`
+    );
+    if (!confirmed) return;
 
-  const filteredChat = selectedModel === 'ALL MODELS'
-    ? MODELCHAT
-    : MODELCHAT.filter(c => c.model === selectedModel);
+    setIsClosingPositions(true);
+    setCloseError(null);
 
-  const filteredComp = selectedModel === 'ALL MODELS'
-    ? COMP_DETAILS
-    : COMP_DETAILS.filter(c => c.model === selectedModel);
+    try {
+      const response = await fetch('/api/positions/close-all', {
+        method: 'POST',
+      });
+      const data = await response.json();
+
+      if (!data.success) {
+        setCloseError(data.error || 'Failed to close positions');
+      }
+    } catch (error) {
+      setCloseError('Network error while closing positions');
+      console.error('Failed to close positions:', error);
+    } finally {
+      setIsClosingPositions(false);
+    }
+  };
+
+  const handleClosePosition = async (pos: Position) => {
+    const confirmed = window.confirm(
+      `Close ${pos.side} ${pos.asset} position (${pos.quantity} ${pos.asset})?`
+    );
+    if (!confirmed) return;
+
+    setClosingPositionId(pos.id);
+    setCloseError(null);
+
+    try {
+      const response = await fetch('/api/positions/close', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset: pos.asset,
+          side: pos.side,
+          size: pos.quantity,
+        }),
+      });
+      const data = await response.json();
+
+      if (!data.success) {
+        setCloseError(data.error || `Failed to close ${pos.asset} position`);
+      }
+    } catch (error) {
+      setCloseError(`Network error closing ${pos.asset} position`);
+      console.error('Failed to close position:', error);
+    } finally {
+      setClosingPositionId(null);
+    }
+  };
+
+  const messageTypeStyles = {
+    decision: 'bg-blue-50 border-blue-200 text-blue-800',
+    info: 'bg-gray-50 border-gray-200 text-gray-700',
+    trade: 'bg-green-50 border-green-200 text-green-800',
+    error: 'bg-red-50 border-red-200 text-red-800',
+  };
+
+  const messageTypeIcons = {
+    decision: '🤔',
+    info: 'ℹ️',
+    trade: '📈',
+    error: '⚠️',
+  };
 
   return (
-    <div className="bg-white font-inter w-full">
+    <div className="bg-white font-inter w-full h-full flex flex-col">
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-200 shrink-0">
         <div className="w-full px-0 overflow-x-auto scrollbar-hide">
           <div className="flex min-w-max">
             {TABS.map((tab) => (
@@ -207,144 +178,221 @@ export default function TradesDashboard() {
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="border-b border-gray-200">
-        <div className="w-full px-3 sm:px-4 xl:px-6 py-2 xl:py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
-          <div className="flex items-center gap-2 xl:gap-3">
-            <span className="text-xs xl:text-sm 2xl:text-base font-medium text-gray-600">FILTER:</span>
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              className="text-xs xl:text-sm 2xl:text-base font-medium border border-gray-300 rounded px-2 xl:px-3 py-1 xl:py-2 bg-white"
-            >
-              {MODELS.map((model) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))}
-            </select>
+      {/* Status Bar */}
+      <div className="border-b border-gray-200 shrink-0">
+        <div className="w-full px-3 sm:px-4 xl:px-6 py-2 xl:py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {isAgentRunning ? (
+              <>
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                <span className="text-xs xl:text-sm text-green-600 font-medium">Agent Active</span>
+              </>
+            ) : (
+              <>
+                <span className="w-2 h-2 bg-gray-400 rounded-full" />
+                <span className="text-xs xl:text-sm text-gray-500 font-medium">Agent Stopped</span>
+              </>
+            )}
           </div>
           <span className="text-xs xl:text-sm 2xl:text-base text-gray-500">
-            {activeTab === 'COMPLETED TRADES' && `Showing Last ${filteredTrades.length} Trades`}
-            {activeTab === 'POSITIONS' && `${filteredPositions.length} Open Positions`}
-            {activeTab === 'MODELCHAT' && `${filteredChat.length} Messages`}
-            {activeTab === 'COMP DETAILS' && `${filteredComp.length} Models`}
+            {activeTab === 'COMPLETED TRADES' && `${trades.length} Trades`}
+            {activeTab === 'POSITIONS' && `${positions.length} Open Positions`}
+            {activeTab === 'MODELCHAT' && `${messages.length} Messages`}
+            {activeTab === 'AGENT STATS' && 'Performance Metrics'}
           </span>
         </div>
       </div>
 
       {/* Content */}
-      <div className="w-full px-2 sm:px-3 xl:px-6 py-3 xl:py-5">
-        {/* COMPLETED TRADES */}
-        {activeTab === 'COMPLETED TRADES' && (
-          <div className="space-y-4 xl:space-y-6">
-            {filteredTrades.map((trade) => (
-              <div key={trade.id} className="border-b border-gray-100 pb-4 xl:pb-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 xl:mb-3 gap-1 sm:gap-0">
-                  <div className="flex items-center gap-1 sm:gap-2 xl:gap-3 flex-wrap">
-                    <span className="text-gray-400 text-sm xl:text-base 2xl:text-lg">↻</span>
-                    <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium text-orange-500">{trade.model}</span>
-                    {trade.prevModel && (
-                      <span className="text-[10px] sm:text-xs xl:text-sm text-gray-400">(prev. {trade.prevModel})</span>
-                    )}
-                    <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg text-gray-600 hidden sm:inline">{trade.action}</span>
-                    <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg ${ASSET_ICONS[trade.asset]?.color || 'text-gray-600'}`}>
-                      {ASSET_ICONS[trade.asset]?.emoji}
-                    </span>
-                    <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">{trade.asset}</span>
-                  </div>
-                  <span className="text-[10px] sm:text-xs xl:text-sm text-gray-400">{trade.date}</span>
-                </div>
-                <div className="ml-4 sm:ml-6 xl:ml-8 space-y-1 xl:space-y-2 text-xs sm:text-sm xl:text-base 2xl:text-lg text-gray-600">
-                  <p>Price: ${trade.priceFrom.toLocaleString()} → ${trade.priceTo.toLocaleString()}</p>
-                  <p>Qty: {trade.quantity} | Notional: ${trade.notionalFrom.toLocaleString()} → ${trade.notionalTo.toLocaleString()}</p>
-                  <p>Holding time: {trade.holdingTime}</p>
-                </div>
-                <div className="ml-4 sm:ml-6 xl:ml-8 mt-2 xl:mt-3">
-                  <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">NET P&L: </span>
-                  <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg font-bold ${trade.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {trade.pnl >= 0 ? '+' : '-'}${Math.abs(trade.pnl).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
+      <div className="w-full px-2 sm:px-3 xl:px-6 py-3 xl:py-5 overflow-auto flex-1">
         {/* MODELCHAT */}
         {activeTab === 'MODELCHAT' && (
-          <div className="space-y-4 xl:space-y-6">
-            {filteredChat.map((msg) => (
-              <div key={msg.id} className="border-b border-gray-100 pb-4 xl:pb-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 xl:mb-3 gap-1 sm:gap-0">
-                  <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium text-orange-500">{msg.model}</span>
-                  <span className="text-[10px] sm:text-xs xl:text-sm text-gray-400">{msg.timestamp}</span>
-                </div>
-                <p className="text-xs sm:text-sm xl:text-base 2xl:text-lg text-gray-600">{msg.message}</p>
+          <div className="space-y-3 xl:space-y-4">
+            {messages.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">
+                <p className="text-sm">No messages yet</p>
+                <p className="text-xs mt-1">Agent activity will appear here</p>
               </div>
-            ))}
+            ) : (
+              messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`border rounded-lg p-3 xl:p-4 ${messageTypeStyles[msg.type]}`}
+                >
+                  <div className="flex items-start gap-2">
+                    <span className="text-base">{messageTypeIcons[msg.type]}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        {msg.asset && (
+                          <span className={`text-xs font-medium ${ASSET_ICONS[msg.asset]?.color || 'text-gray-600'}`}>
+                            {ASSET_ICONS[msg.asset]?.emoji} {msg.asset}
+                          </span>
+                        )}
+                        <span className="text-[10px] xl:text-xs text-gray-400 shrink-0">{msg.timestamp}</span>
+                      </div>
+                      <p className="text-xs sm:text-sm xl:text-base">{msg.message}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
 
         {/* POSITIONS */}
         {activeTab === 'POSITIONS' && (
           <div className="space-y-4 xl:space-y-6">
-            {filteredPositions.map((pos) => (
-              <div key={pos.id} className="border-b border-gray-100 pb-4 xl:pb-6">
-                <div className="flex items-center justify-between mb-2 xl:mb-3">
-                  <div className="flex items-center gap-1 sm:gap-2 xl:gap-3 flex-wrap">
-                    <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium text-orange-500">{pos.model}</span>
-                    <span className={`text-[10px] sm:text-xs xl:text-sm px-1.5 sm:px-2 xl:px-3 py-0.5 xl:py-1 rounded ${pos.side === 'LONG' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {pos.side}
+            {/* Close All Button - Always visible */}
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <span className="text-xs text-gray-500">
+                {positions.length} open position{positions.length !== 1 ? 's' : ''}
+              </span>
+              <button
+                onClick={handleCloseAllPositions}
+                disabled={isClosingPositions || positions.length === 0}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-red-500 hover:bg-red-600 disabled:bg-red-300 disabled:cursor-not-allowed rounded transition-colors"
+              >
+                {isClosingPositions ? 'Closing...' : 'Close All Positions'}
+              </button>
+            </div>
+            {closeError && (
+              <div className="px-3 py-2 text-xs text-red-600 bg-red-50 rounded border border-red-200">
+                {closeError}
+              </div>
+            )}
+            {positions.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">
+                <p className="text-sm">No open positions</p>
+                <p className="text-xs mt-1">Positions will appear here when the agent opens trades</p>
+              </div>
+            ) : (
+              positions.map((pos) => (
+                <div key={pos.id} className="border-b border-gray-100 pb-4 xl:pb-6">
+                  <div className="flex items-center justify-between mb-2 xl:mb-3">
+                    <div className="flex items-center gap-1 sm:gap-2 xl:gap-3 flex-wrap">
+                      <span className={`text-[10px] sm:text-xs xl:text-sm px-1.5 sm:px-2 xl:px-3 py-0.5 xl:py-1 rounded font-medium ${
+                        pos.side === 'LONG' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {pos.side}
+                      </span>
+                      <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg ${ASSET_ICONS[pos.asset]?.color || 'text-gray-600'}`}>
+                        {ASSET_ICONS[pos.asset]?.emoji}
+                      </span>
+                      <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">{pos.asset}</span>
+                      {pos.leverage && (
+                        <span className="text-[10px] sm:text-xs xl:text-sm text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                          {pos.leverage}x
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleClosePosition(pos)}
+                      disabled={closingPositionId === pos.id}
+                      className="px-2 py-1 text-[10px] sm:text-xs font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {closingPositionId === pos.id ? 'Closing...' : 'Close'}
+                    </button>
+                  </div>
+                  <div className="ml-0 sm:ml-6 xl:ml-8 space-y-1 xl:space-y-2 text-xs sm:text-sm xl:text-base 2xl:text-lg text-gray-600">
+                    <p>Entry: ${pos.entryPrice.toLocaleString()} | Current: ${pos.currentPrice.toLocaleString()}</p>
+                    <p>Size: {pos.quantity} {pos.asset}</p>
+                    {pos.liquidationPrice && (
+                      <p className="text-red-500">Liq. Price: ${pos.liquidationPrice.toLocaleString()}</p>
+                    )}
+                  </div>
+                  <div className="ml-0 sm:ml-6 xl:ml-8 mt-2 xl:mt-3">
+                    <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">Unrealized P&L: </span>
+                    <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg font-bold ${pos.unrealizedPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      {pos.unrealizedPnl >= 0 ? '+' : ''}{pos.unrealizedPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC
                     </span>
-                    <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg ${ASSET_ICONS[pos.asset]?.color || 'text-gray-600'}`}>
-                      {ASSET_ICONS[pos.asset]?.emoji}
-                    </span>
-                    <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">{pos.asset}</span>
                   </div>
                 </div>
-                <div className="ml-4 sm:ml-6 xl:ml-8 space-y-1 xl:space-y-2 text-xs sm:text-sm xl:text-base 2xl:text-lg text-gray-600">
-                  <p>Entry: ${pos.entryPrice.toLocaleString()} → Current: ${pos.currentPrice.toLocaleString()}</p>
-                  <p>Quantity: {pos.quantity}</p>
-                </div>
-                <div className="ml-4 sm:ml-6 xl:ml-8 mt-2 xl:mt-3">
-                  <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">Unrealized P&L: </span>
-                  <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg font-bold ${pos.unrealizedPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {pos.unrealizedPnl >= 0 ? '+' : '-'}${Math.abs(pos.unrealizedPnl).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
 
-        {/* COMP DETAILS */}
-        {activeTab === 'COMP DETAILS' && (
-          <div className="overflow-x-auto scrollbar-hide">
-            <table className="w-full text-xs sm:text-sm xl:text-base 2xl:text-lg min-w-[500px]">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6 font-medium text-gray-600">Model</th>
-                  <th className="text-left py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6 font-medium text-gray-600">Trades</th>
-                  <th className="text-left py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6 font-medium text-gray-600">Win Rate</th>
-                  <th className="text-left py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6 font-medium text-gray-600">Total P&L</th>
-                  <th className="text-left py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6 font-medium text-gray-600">Avg Hold</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredComp.map((comp) => (
-                  <tr key={comp.model} className="border-b border-gray-100">
-                    <td className="py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6 font-medium text-orange-500">{comp.model}</td>
-                    <td className="py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6">{comp.totalTrades}</td>
-                    <td className="py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6">{comp.winRate}%</td>
-                    <td className={`py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6 font-medium ${comp.totalPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      {comp.totalPnl >= 0 ? '+' : '-'}${Math.abs(comp.totalPnl).toFixed(2)}
-                    </td>
-                    <td className="py-2 sm:py-3 xl:py-4 px-2 sm:px-4 xl:px-6">{comp.avgHoldTime}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* COMPLETED TRADES */}
+        {activeTab === 'COMPLETED TRADES' && (
+          <div className="space-y-4 xl:space-y-6">
+            {trades.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">
+                <p className="text-sm">No completed trades</p>
+                <p className="text-xs mt-1">Trade history will appear here</p>
+              </div>
+            ) : (
+              trades.map((trade) => (
+                <div key={trade.id} className="border-b border-gray-100 pb-4 xl:pb-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 xl:mb-3 gap-1 sm:gap-0">
+                    <div className="flex items-center gap-1 sm:gap-2 xl:gap-3 flex-wrap">
+                      <span className="text-gray-400 text-sm xl:text-base 2xl:text-lg">↻</span>
+                      <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg text-gray-600">{trade.action}</span>
+                      <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg ${ASSET_ICONS[trade.asset]?.color || 'text-gray-600'}`}>
+                        {ASSET_ICONS[trade.asset]?.emoji}
+                      </span>
+                      <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">{trade.asset}</span>
+                    </div>
+                    <span className="text-[10px] sm:text-xs xl:text-sm text-gray-400">{trade.date}</span>
+                  </div>
+                  <div className="ml-4 sm:ml-6 xl:ml-8 space-y-1 xl:space-y-2 text-xs sm:text-sm xl:text-base 2xl:text-lg text-gray-600">
+                    <p>Price: ${trade.priceFrom.toLocaleString()} → ${trade.priceTo.toLocaleString()}</p>
+                    <p>Qty: {trade.quantity} | Notional: ${trade.notionalFrom.toLocaleString()} → ${trade.notionalTo.toLocaleString()}</p>
+                    <p>Holding time: {trade.holdingTime}</p>
+                  </div>
+                  <div className="ml-4 sm:ml-6 xl:ml-8 mt-2 xl:mt-3">
+                    <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">NET P&L: </span>
+                    <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg font-bold ${trade.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      {trade.pnl >= 0 ? '+' : ''}{trade.pnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* AGENT STATS */}
+        {activeTab === 'AGENT STATS' && (
+          <div>
+            {!stats ? (
+              <div className="text-center py-10 text-gray-400">
+                <p className="text-sm">No stats available</p>
+                <p className="text-xs mt-1">Statistics will appear after the agent completes trades</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 xl:gap-6">
+                <div className="bg-gray-50 rounded-lg p-4 xl:p-6">
+                  <p className="text-xs xl:text-sm text-gray-500 mb-1">Total Trades</p>
+                  <p className="text-xl xl:text-2xl font-bold text-gray-900">{stats.totalTrades}</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4 xl:p-6">
+                  <p className="text-xs xl:text-sm text-gray-500 mb-1">Win Rate</p>
+                  <p className="text-xl xl:text-2xl font-bold text-gray-900">{stats.winRate.toFixed(1)}%</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4 xl:p-6">
+                  <p className="text-xs xl:text-sm text-gray-500 mb-1">Total P&L</p>
+                  <p className={`text-xl xl:text-2xl font-bold ${stats.totalPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {stats.totalPnl >= 0 ? '+' : ''}{stats.totalPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4 xl:p-6">
+                  <p className="text-xs xl:text-sm text-gray-500 mb-1">Avg Hold Time</p>
+                  <p className="text-xl xl:text-2xl font-bold text-gray-900">{stats.avgHoldTime}</p>
+                </div>
+                {stats.sharpeRatio !== undefined && (
+                  <div className="bg-gray-50 rounded-lg p-4 xl:p-6">
+                    <p className="text-xs xl:text-sm text-gray-500 mb-1">Sharpe Ratio</p>
+                    <p className="text-xl xl:text-2xl font-bold text-gray-900">{stats.sharpeRatio.toFixed(2)}</p>
+                  </div>
+                )}
+                {stats.maxDrawdown !== undefined && (
+                  <div className="bg-gray-50 rounded-lg p-4 xl:p-6">
+                    <p className="text-xs xl:text-sm text-gray-500 mb-1">Max Drawdown</p>
+                    <p className="text-xl xl:text-2xl font-bold text-red-500">-{stats.maxDrawdown.toFixed(1)}%</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

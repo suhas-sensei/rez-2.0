@@ -35,30 +35,17 @@ export default function Navbar() {
 
           {/* Center Navigation - Hidden on mobile */}
           <div className="hidden lg:flex absolute left-1/2 -translate-x-1/2 items-center gap-6 xl:gap-10 2xl:gap-14 text-sm xl:text-xl 2xl:text-2xl font-medium text-black">
-            <Link href="/live" className="hover:text-gray-600">LIVE</Link>
+            <Link href="/live" className="hover:text-gray-600"></Link>
             <span className="text-gray-300">|</span>
             <Link href="/leaderboard" className="hover:text-gray-600">LEADERBOARD</Link>
             <span className="text-gray-300">|</span>
             <Link href="/blog" className="hover:text-gray-600">BLOG</Link>
             <span className="text-gray-300">|</span>
-            <Link href="/models" className="hover:text-gray-600">MODELS</Link>
+            <Link href="/models" className="hover:text-gray-600">ABOUT US</Link>
+              <span className="text-gray-300">|</span>
           </div>
 
-          {/* Right Links - Hidden on mobile */}
-          <div className="hidden lg:flex items-center gap-4 xl:gap-6 2xl:gap-8 text-[10px] xl:text-sm 2xl:text-base font-medium text-black font-inter">
-            <Link href="/waitlist" className="hover:text-gray-600 flex items-center gap-1">
-              JOIN THE REZ WAITLIST
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-            </Link>
-            <Link href="/about" className="hover:text-gray-600 flex items-center gap-1">
-              ABOUT REZ
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-            </Link>
-          </div>
+         
         </div>
 
         {/* Mobile Menu */}

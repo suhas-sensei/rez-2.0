@@ -722,15 +722,34 @@ export async function GET(request: Request) {
 
     // Add backend logs as enriched messages (agent output from multi-user backend)
     for (const log of backendLogs) {
-      // Parse timestamp from log format: [2024-01-01T12:00:00.000Z] message
-      const match = log.match(/^\[([^\]]+)\]\s*(.+)$/);
+      // Parse timestamp from log format: [2024-01-01T12:00:00.000Z] message OR 2024-01-01 12:00:00,000 - INFO - message
+      let match = log.match(/^\[([^\]]+)\]\s*(.+)$/);
       if (match) {
         enrichedMessages.push({
-          id: `backend-${match[1]}`,
+          id: `backend-${match[1]}-${Math.random()}`,
           type: 'reasoning',
           message: match[2],
           timestamp: new Date(match[1]).toLocaleString(),
         });
+      } else {
+        // Try Python logging format: 2024-01-01 12:00:00,000 - LEVEL - message
+        match = log.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}),?\d*\s*-\s*\w+\s*-\s*(.+)$/);
+        if (match) {
+          enrichedMessages.push({
+            id: `backend-${match[1]}-${Math.random()}`,
+            type: 'reasoning',
+            message: match[2],
+            timestamp: new Date(match[1].replace(' ', 'T')).toLocaleString(),
+          });
+        } else if (log.trim()) {
+          // Fallback: just show the log as-is
+          enrichedMessages.push({
+            id: `backend-${Date.now()}-${Math.random()}`,
+            type: 'reasoning',
+            message: log,
+            timestamp: new Date().toLocaleString(),
+          });
+        }
       }
     }
 

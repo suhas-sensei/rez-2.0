@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, ColorType, AreaSeries } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, LineData, Time } from 'lightweight-charts';
+import { useCurrency } from '@/context/CurrencyContext';
 
 interface BalanceChartProps {
   currentBalance: number | null;
@@ -14,22 +15,13 @@ interface BalanceDataPoint {
   value: number;
 }
 
-const TIME_RANGES = [
-  { label: '1H', value: 3600 },
-  { label: '4H', value: 14400 },
-  { label: '1D', value: 86400 },
-  { label: '1W', value: 604800 },
-  { label: 'ALL', value: 0 },
-];
-
 export default function BalanceChart({ currentBalance, className = '' }: BalanceChartProps) {
+  const { symbol: currencySymbol } = useCurrency();
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Area'> | null>(null);
   const [markerPosition, setMarkerPosition] = useState<{ x: number; y: number } | null>(null);
   const [balanceHistory, setBalanceHistory] = useState<BalanceDataPoint[]>([]);
-  const [selectedRange, setSelectedRange] = useState(86400); // Default 1D
-  const [chartType, setChartType] = useState<'line' | 'area'>('area');
   const [startBalance, setStartBalance] = useState<number | null>(null);
   const [pnlPercent, setPnlPercent] = useState<number>(0);
   const lastUpdateRef = useRef<number>(0);
@@ -75,7 +67,7 @@ export default function BalanceChart({ currentBalance, className = '' }: Balance
     return () => clearInterval(interval);
   }, [currentBalance]);
 
-  // Filter data based on selected time range
+  // Get all balance data
   const getFilteredData = useCallback(() => {
     // If no history but we have current balance, create synthetic data points
     if (balanceHistory.length === 0 && currentBalance !== null) {
@@ -95,13 +87,8 @@ export default function BalanceChart({ currentBalance, className = '' }: Balance
       ];
     }
 
-    if (balanceHistory.length === 0) return [];
-
-    const now = Math.floor(Date.now() / 1000);
-    const cutoff = selectedRange === 0 ? 0 : now - selectedRange;
-
-    return balanceHistory.filter(point => point.time >= cutoff);
-  }, [balanceHistory, selectedRange, currentBalance]);
+    return balanceHistory;
+  }, [balanceHistory, currentBalance]);
 
   // Initialize and update chart
   useEffect(() => {
@@ -123,6 +110,7 @@ export default function BalanceChart({ currentBalance, className = '' }: Balance
         background: { type: ColorType.Solid, color: 'white' },
         textColor: '#666',
         fontSize: 12,
+        fontFamily: 'Inter, sans-serif',
       },
       grid: {
         vertLines: { color: '#f0f0f0' },
@@ -149,7 +137,7 @@ export default function BalanceChart({ currentBalance, className = '' }: Balance
       },
       autoSize: true,
       localization: {
-        priceFormatter: (price: number) => `$${price.toFixed(2)}`,
+        priceFormatter: (price: number) => `${currencySymbol}${price.toFixed(2)}`,
       },
     });
 
@@ -238,7 +226,7 @@ export default function BalanceChart({ currentBalance, className = '' }: Balance
         chartRef.current = null;
       }
     };
-  }, [balanceHistory, selectedRange, getFilteredData]);
+  }, [balanceHistory, getFilteredData]);
 
   // Update chart data when balance history changes
   useEffect(() => {
@@ -271,52 +259,15 @@ export default function BalanceChart({ currentBalance, className = '' }: Balance
     }
   }, [balanceHistory, getFilteredData]);
 
-  const clearHistory = () => {
-    setBalanceHistory([]);
-    localStorage.removeItem('balanceHistory');
-  };
-
   return (
-    <div className={`w-full h-full flex flex-col overflow-hidden ${className}`}>
-      {/* Chart Toolbar */}
-      <div className="border-b border-gray-200 font-inter">
-        <div className="flex items-center justify-between">
-          {/* Left: Time ranges */}
-          <div className="flex items-center">
-            {TIME_RANGES.map((range) => (
-              <button
-                key={range.value}
-                onClick={() => setSelectedRange(range.value)}
-                className={`px-3 xl:px-5 py-2 xl:py-3 text-sm xl:text-base font-medium transition-colors whitespace-nowrap ${
-                  selectedRange === range.value
-                    ? 'bg-gray-100 text-black border-b-2 border-black'
-                    : 'text-gray-500 hover:text-black hover:bg-gray-50'
-                }`}
-              >
-                {range.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Right: Clear button */}
-          <div className="flex items-center">
-            <button
-              onClick={clearHistory}
-              className="px-3 xl:px-5 py-2 xl:py-3 text-sm xl:text-base font-medium text-gray-500 hover:text-red-500 hover:bg-gray-50 transition-colors whitespace-nowrap"
-            >
-              CLEAR
-            </button>
-          </div>
-        </div>
-      </div>
-
+    <div className={`w-full h-full flex flex-col overflow-hidden font-inter ${className}`}>
       {/* Balance display */}
-      <div className="flex items-center gap-3 px-4 py-2 xl:py-3 font-inter bg-white">
-        <span className="text-xl xl:text-2xl 2xl:text-3xl font-medium text-gray-900">Portfolio Value</span>
+      <div className="flex items-center gap-3 px-4 py-2 xl:py-3 bg-white">
+        <span className="text-xl xl:text-2xl 2xl:text-3xl font-medium text-gray-900">Portfolio Value :</span>
         {currentBalance !== null && (
           <>
             <span className="text-xl xl:text-2xl 2xl:text-3xl font-bold text-gray-900">
-              ${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {currencySymbol}{currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
             {balanceHistory.length > 1 && (
               <span className={`text-base xl:text-lg ${pnlPercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>

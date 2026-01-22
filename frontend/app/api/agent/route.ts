@@ -5,6 +5,12 @@ import path from 'path';
 
 // Store the agent process globally
 let agentProcess: ChildProcess | null = null;
+// Track paused state
+export let isAgentPaused = false;
+
+export function setAgentPaused(paused: boolean) {
+  isAgentPaused = paused;
+}
 
 // Path for agent output log
 const getAgentLogPath = () => path.resolve(process.cwd(), '..', 'agent_output.log');
@@ -100,8 +106,10 @@ export async function DELETE() {
     if (agentProcess && !agentProcess.killed) {
       agentProcess.kill('SIGTERM');
       agentProcess = null;
+      isAgentPaused = false;
       return NextResponse.json({ success: true, message: 'Agent stopped' });
     }
+    isAgentPaused = false;
     return NextResponse.json({ success: true, message: 'No agent running' });
   } catch (error) {
     console.error('Failed to stop agent:', error);
@@ -113,6 +121,7 @@ export async function GET() {
   const isRunning = agentProcess !== null && !agentProcess.killed;
   return NextResponse.json({
     running: isRunning,
+    paused: isAgentPaused,
     pid: isRunning ? agentProcess?.pid : null,
   });
 }

@@ -489,6 +489,31 @@ export async function GET(request: Request) {
       }
     }
 
+    // Calculate average hold time from completed trades
+    const calculateAvgHoldTime = (): string => {
+      if (completedTrades.length === 0) return '-';
+
+      let totalMinutes = 0;
+      for (const trade of completedTrades) {
+        const holdTime = trade.holdingTime;
+        let mins = 0;
+        const dayMatch = holdTime.match(/(\d+)d/);
+        const hourMatch = holdTime.match(/(\d+)h/);
+        const minMatch = holdTime.match(/(\d+)m/);
+        if (dayMatch) mins += parseInt(dayMatch[1]) * 24 * 60;
+        if (hourMatch) mins += parseInt(hourMatch[1]) * 60;
+        if (minMatch) mins += parseInt(minMatch[1]);
+        totalMinutes += mins;
+      }
+
+      const avgMins = Math.floor(totalMinutes / completedTrades.length);
+      const days = Math.floor(avgMins / (24 * 60));
+      const hours = Math.floor((avgMins % (24 * 60)) / 60);
+      const mins = avgMins % 60;
+
+      return `${days}d ${hours}h ${mins}m`;
+    };
+
     // Calculate stats
     const stats: AgentStats = {
       totalTrades: tradeEntries.length,
@@ -496,7 +521,7 @@ export async function GET(request: Request) {
         ? (completedTrades.filter(t => t.pnl > 0).length / completedTrades.length) * 100
         : 0,
       totalPnl: completedTrades.reduce((sum, t) => sum + t.pnl, 0),
-      avgHoldTime: completedTrades.length > 0 ? 'N/A' : '0m',
+      avgHoldTime: calculateAvgHoldTime(),
       holdDecisions: holdEntries.length,
       buyDecisions: tradeEntries.filter(e => e.action === 'buy').length,
       sellDecisions: tradeEntries.filter(e => e.action === 'sell').length,

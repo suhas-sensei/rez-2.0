@@ -9,6 +9,7 @@ import PortfolioHeader from '@/components/PortfolioHeader';
 import RiskProfileSelector from '@/components/RiskProfileSelector';
 import type { RiskProfile } from '@/components/RiskProfileSelector';
 import AgentController from '@/components/AgentController';
+import AccountSettings from '@/components/AccountSettings';
 import HomeHero from '@/components/HomeHero';
 import Navbar from '@/components/Navbar';
 import AggregateBar from '@/components/AggregateBar';
@@ -23,6 +24,7 @@ export default function Home() {
 
   // Agent state
   const [isAgentRunning, setIsAgentRunning] = useState(false);
+  const [isAgentPaused, setIsAgentPaused] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<RiskProfile>('conservative');
   const [selectedAssets, setSelectedAssets] = useState<string[]>(['BTC', 'ETH']);
   const [selectedInterval, setSelectedInterval] = useState('5m');
@@ -39,10 +41,11 @@ export default function Home() {
     marginUsed: number;
     totalReturnPct?: number;
   } | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string>('');
   const lastEntryTimestamp = useRef<string | null>(null);
 
   const isPortfolioView = selectedSymbol === 'PORTFOLIO';
-  const [portfolioTab, setPortfolioTab] = useState<'config' | 'growth'>('config');
+  const [portfolioTab, setPortfolioTab] = useState<'config' | 'growth' | 'settings'>('config');
 
   const handleLogin = () => {
     setIsLoggedIn(true);
@@ -92,11 +95,28 @@ export default function Home() {
         const response = await fetch('/api/agent');
         const data = await response.json();
         setIsAgentRunning(data.running);
+        setIsAgentPaused(data.paused ?? false);
       } catch (error) {
         console.error('Failed to check agent status:', error);
       }
     };
     checkAgentStatus();
+  }, []);
+
+  // Fetch wallet address on mount
+  useEffect(() => {
+    const fetchWalletAddress = async () => {
+      try {
+        const response = await fetch('/api/wallet');
+        const data = await response.json();
+        if (data.address) {
+          setWalletAddress(data.address);
+        }
+      } catch (error) {
+        console.error('Failed to fetch wallet address:', error);
+      }
+    };
+    fetchWalletAddress();
   }, []);
 
   // Poll logs when agent is running
@@ -207,6 +227,7 @@ export default function Home() {
 
       if (data.success) {
         setIsAgentRunning(false);
+        setIsAgentPaused(false);
         setMessages(prev => [{
           id: Date.now(),
           type: 'info',
@@ -216,6 +237,76 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Failed to stop agent:', error);
+    }
+  };
+
+  const handlePauseAgent = async () => {
+    try {
+      const response = await fetch('/api/agent/pause', {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setIsAgentPaused(true);
+        setMessages(prev => [{
+          id: Date.now(),
+          type: 'info',
+          message: 'Agent paused. No new trades will be opened.',
+          timestamp: new Date().toLocaleString(),
+        }, ...prev]);
+      } else {
+        setMessages(prev => [{
+          id: Date.now(),
+          type: 'error',
+          message: `Failed to pause agent: ${data.error || 'Unknown error'}`,
+          timestamp: new Date().toLocaleString(),
+        }, ...prev]);
+      }
+    } catch (error) {
+      console.error('Failed to pause agent:', error);
+      setMessages(prev => [{
+        id: Date.now(),
+        type: 'error',
+        message: 'Failed to pause agent. Check console for details.',
+        timestamp: new Date().toLocaleString(),
+      }, ...prev]);
+    }
+  };
+
+  const handleResumeAgent = async () => {
+    try {
+      const response = await fetch('/api/agent/resume', {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setIsAgentPaused(false);
+        setMessages(prev => [{
+          id: Date.now(),
+          type: 'info',
+          message: 'Agent resumed. Trading is active again.',
+          timestamp: new Date().toLocaleString(),
+        }, ...prev]);
+      } else {
+        setMessages(prev => [{
+          id: Date.now(),
+          type: 'error',
+          message: `Failed to resume agent: ${data.error || 'Unknown error'}`,
+          timestamp: new Date().toLocaleString(),
+        }, ...prev]);
+      }
+    } catch (error) {
+      console.error('Failed to resume agent:', error);
+      setMessages(prev => [{
+        id: Date.now(),
+        type: 'error',
+        message: 'Failed to resume agent. Check console for details.',
+        timestamp: new Date().toLocaleString(),
+      }, ...prev]);
     }
   };
 
@@ -288,36 +379,18 @@ export default function Home() {
           style={isDesktop ? { width: `calc(${leftWidth}% - 64px)` } : undefined}
         >
           {isPortfolioView ? (
-            /* Portfolio View - Tabs for Config & Growth */
+            /* Portfolio View */
             <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Tab Header */}
-              <div className="flex border-b border-gray-200 bg-white shrink-0">
-                <button
-                  onClick={() => setPortfolioTab('config')}
-                  className={`px-6 py-3 text-sm font-semibold transition-colors ${
-                    portfolioTab === 'config'
-                      ? 'text-orange-600 border-b-2 border-orange-500 bg-orange-50/50'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  Portfolio
-                </button>
-                <button
-                  onClick={() => setPortfolioTab('growth')}
-                  className={`px-6 py-3 text-sm font-semibold transition-colors ${
-                    portfolioTab === 'growth'
-                      ? 'text-orange-600 border-b-2 border-orange-500 bg-orange-50/50'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  Growth
-                </button>
-              </div>
-
-              {/* Tab Content */}
-              {portfolioTab === 'config' ? (
+              {portfolioTab === 'config' && (
                 <div className="flex-1 overflow-auto">
-                  <PortfolioHeader accountState={accountState} />
+                  <PortfolioHeader
+                    accountState={accountState}
+                    onAccountSettings={() => setPortfolioTab('settings')}
+                    onViewGrowth={() => setPortfolioTab('growth')}
+                    onCloseAllPositions={handleCloseAllPositions}
+                    positionsCount={positions.length}
+                    isClosingPositions={isClosingPositions}
+                  />
                   <RiskProfileSelector
                     selectedProfile={selectedProfile}
                     onSelectProfile={setSelectedProfile}
@@ -325,8 +398,11 @@ export default function Home() {
                   />
                   <AgentController
                     isRunning={isAgentRunning}
+                    isPaused={isAgentPaused}
                     onStartAgent={handleStartAgent}
                     onStopAgent={handleStopAgent}
+                    onPauseAgent={handlePauseAgent}
+                    onResumeAgent={handleResumeAgent}
                     selectedProfile={selectedProfile}
                     selectedAssets={selectedAssets}
                     onAssetsChange={setSelectedAssets}
@@ -335,11 +411,46 @@ export default function Home() {
                     positionsCount={positions.length}
                     onCloseAllPositions={handleCloseAllPositions}
                     isClosingPositions={isClosingPositions}
+                    onViewGrowth={() => setPortfolioTab('growth')}
                   />
                 </div>
-              ) : (
-                <div className="flex-1 min-h-0">
-                  <BalanceChart currentBalance={accountState?.balance ?? null} />
+              )}
+
+              {portfolioTab === 'growth' && (
+                <div className="flex-1 min-h-0 flex flex-col">
+                  {/* Back to Config button */}
+                  <div className="px-4 py-3 border-b border-gray-200 bg-white shrink-0">
+                    <button
+                      onClick={() => setPortfolioTab('config')}
+                      className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                      Back to Portfolio
+                    </button>
+                  </div>
+                  <div className="flex-1 min-h-0">
+                    <BalanceChart currentBalance={accountState?.balance ?? null} />
+                  </div>
+                </div>
+              )}
+
+              {portfolioTab === 'settings' && (
+                <div className="flex-1 min-h-0 flex flex-col">
+                  {/* Back to Config button */}
+                  <div className="px-4 py-3 border-b border-gray-200 bg-white shrink-0">
+                    <button
+                      onClick={() => setPortfolioTab('config')}
+                      className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                      Back to Portfolio
+                    </button>
+                  </div>
+                  <AccountSettings walletAddress={walletAddress} />
                 </div>
               )}
             </div>

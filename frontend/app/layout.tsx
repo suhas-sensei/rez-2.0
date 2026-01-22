@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Instrument_Serif, Inter } from "next/font/google";
 import "./globals.css";
+import Providers from "@/components/Providers";
 
 const instrumentSerif = Instrument_Serif({
   weight: ["400"],
@@ -27,7 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full overflow-hidden">
       <body className={`${instrumentSerif.variable} ${inter.variable} antialiased h-full overflow-hidden`}>
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

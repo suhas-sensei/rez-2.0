@@ -1,17 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { useCurrency } from '@/context/CurrencyContext';
 
 const TABS = ['MODELCHAT', 'POSITIONS', 'COMPLETED TRADES', 'AGENT STATS'];
-
-const ASSET_ICONS: Record<string, { emoji: string; color: string }> = {
-  BTC: { emoji: '₿', color: 'text-orange-500' },
-  ETH: { emoji: '◆', color: 'text-blue-400' },
-  SOL: { emoji: '◎', color: 'text-purple-400' },
-  AVAX: { emoji: '▲', color: 'text-red-400' },
-  DOGE: { emoji: 'Ð', color: 'text-yellow-500' },
-  STRK: { emoji: '⚡', color: 'text-purple-500' },
-};
 
 export interface Trade {
   id: number | string;
@@ -80,6 +72,7 @@ export default function TradesDashboard({
   const [isClosingPositions, setIsClosingPositions] = useState(false);
   const [closingPositionId, setClosingPositionId] = useState<string | number | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
+  const { symbol: currencySymbol } = useCurrency();
 
   const handleCloseAllPositions = async () => {
     if (positions.length === 0) return;
@@ -139,20 +132,6 @@ export default function TradesDashboard({
     } finally {
       setClosingPositionId(null);
     }
-  };
-
-  const messageTypeStyles = {
-    decision: 'bg-blue-50 border-blue-200 text-blue-800',
-    info: 'bg-gray-50 border-gray-200 text-gray-700',
-    trade: 'bg-green-50 border-green-200 text-green-800',
-    error: 'bg-red-50 border-red-200 text-red-800',
-  };
-
-  const messageTypeIcons = {
-    decision: '🤔',
-    info: 'ℹ️',
-    trade: '📈',
-    error: '⚠️',
   };
 
   return (
@@ -217,22 +196,13 @@ export default function TradesDashboard({
               messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`border rounded-lg p-3 xl:p-4 ${messageTypeStyles[msg.type]}`}
+                  className="bg-gray-50/80 rounded-2xl border border-gray-100 shadow-sm p-4 xl:p-5"
                 >
-                  <div className="flex items-start gap-2">
-                    <span className="text-base">{messageTypeIcons[msg.type]}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        {msg.asset && (
-                          <span className={`text-xs font-medium ${ASSET_ICONS[msg.asset]?.color || 'text-gray-600'}`}>
-                            {ASSET_ICONS[msg.asset]?.emoji} {msg.asset}
-                          </span>
-                        )}
-                        <span className="text-[10px] xl:text-xs text-gray-400 shrink-0">{msg.timestamp}</span>
-                      </div>
-                      <p className="text-xs sm:text-sm xl:text-base">{msg.message}</p>
-                    </div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-[10px] xl:text-xs font-medium text-gray-600">Agent Rez</span>
+                    <span className="text-[10px] xl:text-xs text-gray-400">{msg.timestamp}</span>
                   </div>
+                  <p className="text-[10px] sm:text-xs xl:text-sm text-gray-400 leading-relaxed">{msg.message}</p>
                 </div>
               ))
             )}
@@ -267,20 +237,17 @@ export default function TradesDashboard({
               </div>
             ) : (
               positions.map((pos) => (
-                <div key={pos.id} className="border-b border-gray-100 pb-4 xl:pb-6">
-                  <div className="flex items-center justify-between mb-2 xl:mb-3">
-                    <div className="flex items-center gap-1 sm:gap-2 xl:gap-3 flex-wrap">
-                      <span className={`text-[10px] sm:text-xs xl:text-sm px-1.5 sm:px-2 xl:px-3 py-0.5 xl:py-1 rounded font-medium ${
+                <div key={pos.id} className="bg-gray-50/50 border-b border-gray-300 pb-4 xl:pb-5 mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                      <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded font-medium ${
                         pos.side === 'LONG' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                       }`}>
                         {pos.side}
                       </span>
-                      <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg ${ASSET_ICONS[pos.asset]?.color || 'text-gray-600'}`}>
-                        {ASSET_ICONS[pos.asset]?.emoji}
-                      </span>
-                      <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">{pos.asset}</span>
+                      <span className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-900">{pos.asset}</span>
                       {pos.leverage && (
-                        <span className="text-[10px] sm:text-xs xl:text-sm text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] sm:text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
                           {pos.leverage}x
                         </span>
                       )}
@@ -293,17 +260,17 @@ export default function TradesDashboard({
                       {closingPositionId === pos.id ? 'Closing...' : 'Close'}
                     </button>
                   </div>
-                  <div className="ml-0 sm:ml-6 xl:ml-8 space-y-1 xl:space-y-2 text-xs sm:text-sm xl:text-base 2xl:text-lg text-gray-600">
-                    <p>Entry: ${pos.entryPrice.toLocaleString()} | Current: ${pos.currentPrice.toLocaleString()}</p>
+                  <div className="ml-0 sm:ml-6 space-y-1 text-[10px] sm:text-xs xl:text-sm text-gray-600">
+                    <p>Entry: {currencySymbol}{pos.entryPrice.toLocaleString()} | Current: {currencySymbol}{pos.currentPrice.toLocaleString()}</p>
                     <p>Size: {pos.quantity} {pos.asset}</p>
                     {pos.liquidationPrice && (
-                      <p className="text-red-500">Liq. Price: ${pos.liquidationPrice.toLocaleString()}</p>
+                      <p className="text-red-500">Liq. Price: {currencySymbol}{pos.liquidationPrice.toLocaleString()}</p>
                     )}
                   </div>
-                  <div className="ml-0 sm:ml-6 xl:ml-8 mt-2 xl:mt-3">
-                    <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">Unrealized P&L: </span>
-                    <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg font-bold ${pos.unrealizedPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      {pos.unrealizedPnl >= 0 ? '+' : ''}{pos.unrealizedPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC
+                  <div className="ml-0 sm:ml-6 mt-2">
+                    <span className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700">Unrealized P&L: </span>
+                    <span className={`text-[10px] sm:text-xs xl:text-sm font-bold ${pos.unrealizedPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      {pos.unrealizedPnl >= 0 ? '+' : ''}{currencySymbol}{pos.unrealizedPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>
@@ -322,27 +289,24 @@ export default function TradesDashboard({
               </div>
             ) : (
               trades.map((trade) => (
-                <div key={trade.id} className="border-b border-gray-100 pb-4 xl:pb-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 xl:mb-3 gap-1 sm:gap-0">
-                    <div className="flex items-center gap-1 sm:gap-2 xl:gap-3 flex-wrap">
-                      <span className="text-gray-400 text-sm xl:text-base 2xl:text-lg">↻</span>
-                      <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg text-gray-600">{trade.action}</span>
-                      <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg ${ASSET_ICONS[trade.asset]?.color || 'text-gray-600'}`}>
-                        {ASSET_ICONS[trade.asset]?.emoji}
-                      </span>
-                      <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">{trade.asset}</span>
+                <div key={trade.id} className="bg-gray-50/50 border-b border-gray-300 pb-4 xl:pb-5 mb-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1 sm:gap-0">
+                    <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                      <span className="text-gray-400 text-[10px] sm:text-xs">↻</span>
+                      <span className="text-[10px] sm:text-xs xl:text-sm text-gray-600">{trade.action}</span>
+                      <span className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-900">{trade.asset}</span>
                     </div>
-                    <span className="text-[10px] sm:text-xs xl:text-sm text-gray-400">{trade.date}</span>
+                    <span className="text-[10px] sm:text-xs text-gray-400">{trade.date}</span>
                   </div>
-                  <div className="ml-4 sm:ml-6 xl:ml-8 space-y-1 xl:space-y-2 text-xs sm:text-sm xl:text-base 2xl:text-lg text-gray-600">
-                    <p>Price: ${trade.priceFrom.toLocaleString()} → ${trade.priceTo.toLocaleString()}</p>
-                    <p>Qty: {trade.quantity} | Notional: ${trade.notionalFrom.toLocaleString()} → ${trade.notionalTo.toLocaleString()}</p>
+                  <div className="ml-0 sm:ml-6 space-y-1 text-[10px] sm:text-xs xl:text-sm text-gray-600">
+                    <p>Price: {currencySymbol}{trade.priceFrom.toLocaleString()} → {currencySymbol}{trade.priceTo.toLocaleString()}</p>
+                    <p>Qty: {trade.quantity} | Notional: {currencySymbol}{trade.notionalFrom.toLocaleString()} → {currencySymbol}{trade.notionalTo.toLocaleString()}</p>
                     <p>Holding time: {trade.holdingTime}</p>
                   </div>
-                  <div className="ml-4 sm:ml-6 xl:ml-8 mt-2 xl:mt-3">
-                    <span className="text-xs sm:text-sm xl:text-base 2xl:text-lg font-medium">NET P&L: </span>
-                    <span className={`text-xs sm:text-sm xl:text-base 2xl:text-lg font-bold ${trade.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      {trade.pnl >= 0 ? '+' : ''}{trade.pnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC
+                  <div className="ml-0 sm:ml-6 mt-2">
+                    <span className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700">NET P&L: </span>
+                    <span className={`text-[10px] sm:text-xs xl:text-sm font-bold ${trade.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      {trade.pnl >= 0 ? '+' : ''}{currencySymbol}{trade.pnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>
@@ -360,35 +324,35 @@ export default function TradesDashboard({
                 <p className="text-xs mt-1">Statistics will appear after the agent completes trades</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-4 xl:gap-6">
-                <div className="bg-gray-50 rounded-lg p-4 xl:p-6">
-                  <p className="text-xs xl:text-sm text-gray-500 mb-1">Total Trades</p>
-                  <p className="text-xl xl:text-2xl font-bold text-gray-900">{stats.totalTrades}</p>
+              <div className="grid grid-cols-2 gap-3 xl:gap-4">
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-4 xl:p-5 border border-gray-200/60">
+                  <p className="text-[10px] xl:text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Total Trades</p>
+                  <p className="text-lg xl:text-xl font-bold text-gray-900">{stats.totalTrades}</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-4 xl:p-6">
-                  <p className="text-xs xl:text-sm text-gray-500 mb-1">Win Rate</p>
-                  <p className="text-xl xl:text-2xl font-bold text-gray-900">{stats.winRate.toFixed(1)}%</p>
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-4 xl:p-5 border border-gray-200/60">
+                  <p className="text-[10px] xl:text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Win Rate</p>
+                  <p className="text-lg xl:text-xl font-bold text-gray-900">{stats.winRate.toFixed(1)}%</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-4 xl:p-6">
-                  <p className="text-xs xl:text-sm text-gray-500 mb-1">Total P&L</p>
-                  <p className={`text-xl xl:text-2xl font-bold ${stats.totalPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {stats.totalPnl >= 0 ? '+' : ''}{stats.totalPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-4 xl:p-5 border border-gray-200/60">
+                  <p className="text-[10px] xl:text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Total P&L</p>
+                  <p className={`text-lg xl:text-xl font-bold ${stats.totalPnl >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    {stats.totalPnl >= 0 ? '+' : ''}{currencySymbol}{stats.totalPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-4 xl:p-6">
-                  <p className="text-xs xl:text-sm text-gray-500 mb-1">Avg Hold Time</p>
-                  <p className="text-xl xl:text-2xl font-bold text-gray-900">{stats.avgHoldTime}</p>
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-4 xl:p-5 border border-gray-200/60">
+                  <p className="text-[10px] xl:text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Avg Hold Time</p>
+                  <p className="text-lg xl:text-xl font-bold text-gray-900">{stats.avgHoldTime || '-'}</p>
                 </div>
                 {stats.sharpeRatio !== undefined && (
-                  <div className="bg-gray-50 rounded-lg p-4 xl:p-6">
-                    <p className="text-xs xl:text-sm text-gray-500 mb-1">Sharpe Ratio</p>
-                    <p className="text-xl xl:text-2xl font-bold text-gray-900">{stats.sharpeRatio.toFixed(2)}</p>
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-4 xl:p-5 border border-gray-200/60">
+                    <p className="text-[10px] xl:text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Sharpe Ratio</p>
+                    <p className="text-lg xl:text-xl font-bold text-gray-900">{stats.sharpeRatio.toFixed(2)}</p>
                   </div>
                 )}
                 {stats.maxDrawdown !== undefined && (
-                  <div className="bg-gray-50 rounded-lg p-4 xl:p-6">
-                    <p className="text-xs xl:text-sm text-gray-500 mb-1">Max Drawdown</p>
-                    <p className="text-xl xl:text-2xl font-bold text-red-500">-{stats.maxDrawdown.toFixed(1)}%</p>
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-4 xl:p-5 border border-gray-200/60">
+                    <p className="text-[10px] xl:text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Max Drawdown</p>
+                    <p className="text-lg xl:text-xl font-bold text-red-500">-{stats.maxDrawdown.toFixed(1)}%</p>
                   </div>
                 )}
               </div>

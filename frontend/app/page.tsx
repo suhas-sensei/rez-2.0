@@ -186,6 +186,7 @@ export default function Home() {
         body: JSON.stringify({
           assets: selectedAssets,
           interval: selectedInterval,
+          riskProfile: selectedProfile,
         }),
       });
 

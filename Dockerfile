@@ -23,15 +23,22 @@ COPY src ./src
 
 # Copy and build frontend
 COPY frontend ./frontend
+
+# Set backend URL for frontend (internal communication)
+ENV BACKEND_URL=http://localhost:8000
+
 WORKDIR /app/frontend
 RUN npm install && npm run build
 
 # Back to app root
 WORKDIR /app
 
-EXPOSE 3000
+# Copy start script
+COPY start.sh ./
+RUN chmod +x start.sh
 
-# Start the Next.js frontend (which spawns Python agent)
-CMD ["npm", "start", "--prefix", "frontend"]
+# Expose both ports
+EXPOSE 3000 8000
 
-
+# Start both services
+CMD ["./start.sh"]

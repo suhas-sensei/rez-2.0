@@ -1,13 +1,26 @@
 import { NextResponse } from 'next/server';
-import { isAgentPaused, setAgentPaused } from '../route';
+import { getFullSession } from '@/lib/session';
+
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
 export async function POST() {
   try {
-    if (isAgentPaused) {
-      return NextResponse.json({ success: true, message: 'Agent already paused' });
+    const session = await getFullSession();
+
+    if (!session) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    setAgentPaused(true);
+    const response = await fetch(`${BACKEND_URL}/pause-agent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: session.sessionId }),
+    });
+
+    if (!response.ok) {
+      return NextResponse.json({ error: 'Failed to pause agent' }, { status: 500 });
+    }
+
     return NextResponse.json({ success: true, message: 'Agent paused' });
   } catch (error) {
     console.error('Failed to pause agent:', error);

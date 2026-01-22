@@ -8,7 +8,8 @@
       "Bash(ls:*)",
       "Bash(pgrep:*)",
       "Bash(pkill:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(poetry lock:*)"
     ]
   }
 }

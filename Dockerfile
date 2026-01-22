@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 # Install system deps + Node.js
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir poetry
 
 # Copy and install Python deps
 COPY pyproject.toml poetry.lock ./
-RUN poetry install --no-interaction --no-ansi --no-root
+RUN poetry lock --no-update && poetry install --no-interaction --no-ansi --no-root
 
 # Copy Python source
 COPY src ./src

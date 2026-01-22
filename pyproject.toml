@@ -14,7 +14,7 @@ authors = [
     {name = "Gajesh Naik",email = "26431906+Gajesh2007@users.noreply.github.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.10,<4"
+requires-python = ">=3.12,<4"
 dependencies = [
     "hyperliquid-python-sdk (>=0.20.0,<0.21.0)",
     "python-dotenv (>=1.1.1,<2.0.0)",

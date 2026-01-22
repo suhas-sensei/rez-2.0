@@ -393,27 +393,20 @@ export async function GET(request: Request) {
     const projectRoot = path.resolve(process.cwd(), '..');
     const diaryPath = path.join(projectRoot, 'diary.jsonl');
 
-    if (!existsSync(diaryPath)) {
-      return NextResponse.json({
-        entries: [],
-        completedTrades: [],
-        stats: null,
-        message: 'No diary file found'
-      });
-    }
-
-    const content = readFileSync(diaryPath, 'utf-8');
-    const lines = content.trim().split('\n').filter(line => line.trim());
-
-    // Parse each line as JSON
+    // Parse diary entries if file exists, otherwise use empty array
     const entries: DiaryEntry[] = [];
-    for (const line of lines) {
-      try {
-        const entry = JSON.parse(line) as DiaryEntry;
-        entries.push(entry);
-      } catch {
-        // Skip malformed lines
-        continue;
+    if (existsSync(diaryPath)) {
+      const content = readFileSync(diaryPath, 'utf-8');
+      const lines = content.trim().split('\n').filter(line => line.trim());
+
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line) as DiaryEntry;
+          entries.push(entry);
+        } catch {
+          // Skip malformed lines
+          continue;
+        }
       }
     }
 

@@ -5,7 +5,6 @@ import os
 import sys
 import pathlib
 import logging
-import uuid
 from datetime import datetime, timezone
 from typing import Dict, Optional
 from contextlib import asynccontextmanager
@@ -17,12 +16,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import multiprocessing
-from collections import deque
 
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+# Directory for log files
+LOG_DIR = pathlib.Path("/tmp/rez_logs")
+LOG_DIR.mkdir(exist_ok=True)
 
 
 class AgentConfig(BaseModel):
@@ -42,18 +44,44 @@ class AgentInstance:
         self.process: Optional[multiprocessing.Process] = None
         self.started_at: Optional[datetime] = None
         self.paused: bool = False
-        self.logs: deque = deque(maxlen=500)
-        self.log_queue: Optional[multiprocessing.Queue] = None
+        self.log_file = LOG_DIR / f"{session_id}.log"
 
     def is_running(self) -> bool:
         return self.process is not None and self.process.is_alive()
+
+    def get_logs(self, limit: int = 500) -> list[str]:
+        """Read logs from file."""
+        if not self.log_file.exists():
+            return []
+        try:
+            with open(self.log_file, 'r') as f:
+                lines = f.readlines()
+                return [line.strip() for line in lines[-limit:] if line.strip()]
+        except Exception:
+            return []
+
+    def append_log(self, msg: str):
+        """Append a log message to the file."""
+        try:
+            with open(self.log_file, 'a') as f:
+                f.write(msg + "\n")
+        except Exception:
+            pass
+
+    def clear_logs(self):
+        """Clear the log file."""
+        try:
+            if self.log_file.exists():
+                self.log_file.unlink()
+        except Exception:
+            pass
 
 
 # Global agent registry: session_id -> AgentInstance
 agent_registry: Dict[str, AgentInstance] = {}
 
 
-def run_agent_process(config: AgentConfig, log_queue: multiprocessing.Queue):
+def run_agent_process(config: AgentConfig, log_file_path: str):
     """Run the trading agent in a subprocess."""
     import sys
     import pathlib
@@ -71,12 +99,18 @@ def run_agent_process(config: AgentConfig, log_queue: multiprocessing.Queue):
     from src.utils.prompt_utils import json_default, round_or_none, round_series
     import json
     import math
-    from collections import OrderedDict
+    from collections import OrderedDict, deque
 
     def log(msg: str):
-        """Send log message to queue."""
+        """Write log message to file."""
         timestamp = datetime.now(timezone.utc).isoformat()
-        log_queue.put(f"[{timestamp}] {msg}")
+        log_msg = f"[{timestamp}] {msg}"
+        try:
+            with open(log_file_path, 'a') as f:
+                f.write(log_msg + "\n")
+                f.flush()  # Ensure immediate write
+        except Exception:
+            pass
         logger.info(msg)
 
     def get_interval_seconds(interval_str):
@@ -282,18 +316,6 @@ def run_agent_process(config: AgentConfig, log_queue: multiprocessing.Queue):
     asyncio.run(run_loop())
 
 
-async def collect_logs(agent: AgentInstance):
-    """Background task to collect logs from agent subprocess."""
-    while agent.is_running():
-        try:
-            while not agent.log_queue.empty():
-                msg = agent.log_queue.get_nowait()
-                agent.logs.append(msg)
-        except Exception:
-            pass
-        await asyncio.sleep(0.5)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic."""
@@ -343,7 +365,8 @@ async def start_agent(req: StartAgentRequest):
         if existing.is_running():
             existing.process.terminate()
             existing.process.join(timeout=5)
-            logger.info(f"Stopped existing agent for session {session_id}")
+        existing.clear_logs()
+        logger.info(f"Stopped existing agent for session {session_id}")
 
     config = AgentConfig(
         assets=req.assets,
@@ -354,22 +377,19 @@ async def start_agent(req: StartAgentRequest):
     )
 
     agent = AgentInstance(session_id, config)
-    agent.log_queue = multiprocessing.Queue()
-    agent.logs.append(f"[{datetime.now(timezone.utc).isoformat()}] Starting agent...")
+    agent.clear_logs()  # Clear old logs
+    agent.append_log(f"[{datetime.now(timezone.utc).isoformat()}] Starting agent...")
 
-    # Start agent in subprocess
+    # Start agent in subprocess with log file path
     agent.process = multiprocessing.Process(
         target=run_agent_process,
-        args=(config, agent.log_queue),
+        args=(config, str(agent.log_file)),
         daemon=True
     )
     agent.process.start()
     agent.started_at = datetime.now(timezone.utc)
 
     agent_registry[session_id] = agent
-
-    # Start log collector
-    asyncio.create_task(collect_logs(agent))
 
     logger.info(f"Started agent for session {session_id} with assets {req.assets}")
 
@@ -395,7 +415,7 @@ async def stop_agent(req: StopAgentRequest):
     if agent.is_running():
         agent.process.terminate()
         agent.process.join(timeout=5)
-        agent.logs.append(f"[{datetime.now(timezone.utc).isoformat()}] Agent stopped")
+        agent.append_log(f"[{datetime.now(timezone.utc).isoformat()}] Agent stopped")
 
     del agent_registry[session_id]
     logger.info(f"Stopped agent for session {session_id}")
@@ -429,19 +449,20 @@ async def get_agent_status(session_id: str):
 async def get_logs(session_id: str, limit: int = 100):
     """Get logs for an agent."""
     if session_id not in agent_registry:
-        return {"logs": [], "session_id": session_id}
+        # Check if there's a log file even if no agent registered
+        log_file = LOG_DIR / f"{session_id}.log"
+        if log_file.exists():
+            try:
+                with open(log_file, 'r') as f:
+                    lines = f.readlines()
+                    logs = [line.strip() for line in lines[-limit:] if line.strip()]
+                return {"logs": logs, "session_id": session_id, "running": False}
+            except Exception:
+                pass
+        return {"logs": [], "session_id": session_id, "running": False}
 
     agent = agent_registry[session_id]
-
-    # Collect any pending logs
-    try:
-        while not agent.log_queue.empty():
-            msg = agent.log_queue.get_nowait()
-            agent.logs.append(msg)
-    except Exception:
-        pass
-
-    logs = list(agent.logs)[-limit:]
+    logs = agent.get_logs(limit)
 
     return {
         "logs": logs,

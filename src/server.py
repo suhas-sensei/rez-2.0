@@ -87,11 +87,17 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
     import pathlib
     sys.path.append(str(pathlib.Path(__file__).parent.parent))
 
-    # Set environment variables for this agent
+    # Set environment variables for this agent BEFORE importing config_loader
+    # This ensures the correct wallet is used for this session
     os.environ['HYPERLIQUID_PRIVATE_KEY'] = config.private_key
     os.environ['HYPERLIQUID_ACCOUNT_ADDRESS'] = config.public_key
 
-    # Import and run the agent
+    # Import config_loader and update CONFIG with our wallet
+    from src import config_loader
+    config_loader.CONFIG['hyperliquid_private_key'] = config.private_key
+    config_loader.CONFIG['hyperliquid_account_address'] = config.public_key
+
+    # Now import the rest - they'll use the updated CONFIG
     from src.agent.decision_maker import TradingAgent
     from src.indicators.local_indicators import LocalIndicatorCalculator
     from src.trading.hyperliquid_api import HyperliquidAPI

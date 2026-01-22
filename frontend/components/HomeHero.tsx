@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import ColorBends from "@/components/ui/ColorBends"
 import LandingNavbar from "@/components/LandingNavbar"
 
@@ -8,6 +9,48 @@ interface HomeHeroProps {
 }
 
 export default function HomeHero({ onLogin }: HomeHeroProps) {
+  const [inviteCode, setInviteCode] = useState("")
+  const [isValidating, setIsValidating] = useState(false)
+  const [error, setError] = useState("")
+
+  const handleLaunch = async () => {
+    if (!inviteCode.trim()) {
+      setError("Please enter an invite code")
+      return
+    }
+
+    setIsValidating(true)
+    setError("")
+
+    try {
+      const response = await fetch("/api/validate-invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inviteCode: inviteCode.trim() }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.error || "Invalid invite code")
+        setIsValidating(false)
+        return
+      }
+
+      // Success - proceed to app
+      onLogin()
+    } catch (err) {
+      setError("Failed to validate invite code")
+      setIsValidating(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleLaunch()
+    }
+  }
+
   return (
     <section className="relative w-full h-screen flex items-center justify-center bg-white overflow-hidden isolate">
       {/* Landing Navbar */}
@@ -62,14 +105,32 @@ export default function HomeHero({ onLogin }: HomeHeroProps) {
             AI agents.
           </p>
 
-          {/* Button - isolated from blend */}
-          <div className="isolate flex gap-4 justify-center flex-wrap">
-            <button
-              onClick={onLogin}
-              className="px-8 py-3 text-base font-medium bg-black text-white border-none rounded-md cursor-pointer transition-all duration-300 ease-out hover:bg-gray-800 font-inter"
-            >
-              Launch App
-            </button>
+          {/* Invite Code Input */}
+          <div className="isolate flex flex-col items-center gap-3">
+            <div className="flex gap-3 items-center">
+              <input
+                type="text"
+                value={inviteCode}
+                onChange={(e) => {
+                  setInviteCode(e.target.value.toUpperCase())
+                  setError("")
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder="Enter invite code"
+                maxLength={4}
+                className="px-4 py-3 text-base font-medium bg-white/10 backdrop-blur-sm text-white border border-white/20 rounded-md outline-none focus:border-white/50 transition-all duration-300 font-inter w-40 text-center uppercase tracking-widest placeholder:text-white/40 placeholder:normal-case placeholder:tracking-normal"
+              />
+              <button
+                onClick={handleLaunch}
+                disabled={isValidating}
+                className="px-8 py-3 text-base font-medium bg-black text-white border-none rounded-md cursor-pointer transition-all duration-300 ease-out hover:bg-gray-800 font-inter disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isValidating ? "Validating..." : "Launch App"}
+              </button>
+            </div>
+            {error && (
+              <p className="text-red-400 text-sm font-inter">{error}</p>
+            )}
           </div>
         </div>
       </div>

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Wallet } from 'ethers';
+import fs from 'fs';
+import path from 'path';
 
 interface AssetPosition {
   position: {
@@ -15,18 +17,33 @@ interface AssetPosition {
   };
 }
 
+// Get active wallet from runtime config or fallback to env
+function getActiveWallet(): { privateKey: string; publicKey: string } | null {
+  const runtimeConfigPath = path.join(process.cwd(), '.runtime-wallet.json');
+  try {
+    if (fs.existsSync(runtimeConfigPath)) {
+      const data = fs.readFileSync(runtimeConfigPath, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch {
+    // Fallback to env
+  }
+  return null;
+}
+
 export async function GET() {
-  // Use main account address if set, otherwise derive from private key
-  const accountAddress = process.env.HYPERLIQUID_ACCOUNT_ADDRESS;
-  const privateKey = process.env.HYPERLIQUID_PRIVATE_KEY;
   const network = process.env.HYPERLIQUID_NETWORK || 'mainnet';
 
-  // Determine which address to query
+  // Check runtime config first, then fall back to env
+  const runtimeWallet = getActiveWallet();
+
   let queryAddress: string;
-  if (accountAddress) {
-    queryAddress = accountAddress;
-  } else if (privateKey) {
-    const wallet = new Wallet(privateKey);
+  if (runtimeWallet?.publicKey) {
+    queryAddress = runtimeWallet.publicKey;
+  } else if (process.env.HYPERLIQUID_ACCOUNT_ADDRESS) {
+    queryAddress = process.env.HYPERLIQUID_ACCOUNT_ADDRESS;
+  } else if (process.env.HYPERLIQUID_PRIVATE_KEY) {
+    const wallet = new Wallet(process.env.HYPERLIQUID_PRIVATE_KEY);
     queryAddress = wallet.address;
   } else {
     return NextResponse.json({ error: 'Account address not configured' }, { status: 500 });

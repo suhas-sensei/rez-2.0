@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { spawn, ChildProcess } from 'child_process';
-import { appendFileSync, writeFileSync } from 'fs';
+import { appendFileSync, writeFileSync, existsSync, readFileSync } from 'fs';
 import path from 'path';
 
 // Store the agent process globally
@@ -14,6 +14,20 @@ export function setAgentPaused(paused: boolean) {
 
 // Path for agent output log
 const getAgentLogPath = () => path.resolve(process.cwd(), '..', 'agent_output.log');
+
+// Get active wallet from runtime config
+function getActiveWallet(): { privateKey: string; publicKey: string } | null {
+  const runtimeConfigPath = path.join(process.cwd(), '.runtime-wallet.json');
+  try {
+    if (existsSync(runtimeConfigPath)) {
+      const data = readFileSync(runtimeConfigPath, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch {
+    // Fallback to env
+  }
+  return null;
+}
 
 export async function POST(request: Request) {
   try {
@@ -50,15 +64,25 @@ export async function POST(request: Request) {
     const agentLogPath = getAgentLogPath();
     writeFileSync(agentLogPath, '');
 
+    // Get active wallet config for the agent
+    const runtimeWallet = getActiveWallet();
+    const agentEnv: Record<string, string | undefined> = {
+      ...process.env,
+      API_PORT: '3099', // Use different port than Next.js
+    };
+
+    // Override with runtime wallet if available
+    if (runtimeWallet) {
+      agentEnv.HYPERLIQUID_PRIVATE_KEY = runtimeWallet.privateKey;
+      agentEnv.HYPERLIQUID_ACCOUNT_ADDRESS = runtimeWallet.publicKey;
+    }
+
     // Spawn the agent process with a different API port to avoid conflict with Next.js
     agentProcess = spawn('poetry', args, {
       cwd: projectRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
-      env: {
-        ...process.env,
-        API_PORT: '3099', // Use different port than Next.js
-      },
+      env: agentEnv,
     });
 
     const pid = agentProcess.pid;

@@ -20,7 +20,7 @@ export default function Home() {
   const [leftWidth, setLeftWidth] = useState(75);
   const [isDragging, setIsDragging] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
-  const [selectedSymbol, setSelectedSymbol] = useState('ETHUSDT');
+  const [selectedSymbol, setSelectedSymbol] = useState('PORTFOLIO');
 
   // Agent state
   const [isAgentRunning, setIsAgentRunning] = useState(false);

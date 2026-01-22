@@ -145,10 +145,11 @@ export default function Home() {
             asset: msg.asset,
           }));
 
-          // Check if we have new data
-          const latestTimestamp = data.entries?.[0]?.timestamp;
-          if (latestTimestamp !== lastEntryTimestamp.current) {
-            lastEntryTimestamp.current = latestTimestamp;
+          // Always update messages when we have new enriched messages
+          // Use message count + latest message id to detect changes
+          const messageKey = `${newMessages.length}-${newMessages[0]?.id || ''}`;
+          if (messageKey !== lastEntryTimestamp.current) {
+            lastEntryTimestamp.current = messageKey;
             setMessages(newMessages);
           }
         }

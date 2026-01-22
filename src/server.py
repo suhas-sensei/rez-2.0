@@ -106,11 +106,15 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
         timestamp = datetime.now(timezone.utc).isoformat()
         log_msg = f"[{timestamp}] {msg}"
         try:
+            # Ensure parent directory exists
+            log_path = pathlib.Path(log_file_path)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
             with open(log_file_path, 'a') as f:
                 f.write(log_msg + "\n")
                 f.flush()  # Ensure immediate write
-        except Exception:
-            pass
+                os.fsync(f.fileno())  # Force write to disk
+        except Exception as e:
+            logger.error(f"Failed to write log: {e}")
         logger.info(msg)
 
     def get_interval_seconds(interval_str):
@@ -215,7 +219,8 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
                             "funding_annualized_pct": funding_annualized,
                         })
 
-                        log(f"{asset}: ${current_price:.2f} | RSI14: {rsi14_series[-1]:.1f if rsi14_series else 'N/A'}")
+                        rsi_val = f"{rsi14_series[-1]:.1f}" if rsi14_series else "N/A"
+                        log(f"{asset}: ${current_price:.2f} | RSI14: {rsi_val}")
 
                     except Exception as e:
                         log(f"Data gather error {asset}: {e}")
@@ -448,21 +453,29 @@ async def get_agent_status(session_id: str):
 @app.get("/logs/{session_id}")
 async def get_logs(session_id: str, limit: int = 100):
     """Get logs for an agent."""
+    log_file = LOG_DIR / f"{session_id}.log"
+
+    # Debug: check file status
+    file_exists = log_file.exists()
+    file_size = log_file.stat().st_size if file_exists else 0
+    logger.info(f"GET /logs/{session_id}: file_exists={file_exists}, file_size={file_size}")
+
     if session_id not in agent_registry:
         # Check if there's a log file even if no agent registered
-        log_file = LOG_DIR / f"{session_id}.log"
-        if log_file.exists():
+        if file_exists:
             try:
                 with open(log_file, 'r') as f:
                     lines = f.readlines()
                     logs = [line.strip() for line in lines[-limit:] if line.strip()]
+                logger.info(f"GET /logs/{session_id}: returning {len(logs)} logs (no agent)")
                 return {"logs": logs, "session_id": session_id, "running": False}
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"GET /logs/{session_id}: error reading file: {e}")
         return {"logs": [], "session_id": session_id, "running": False}
 
     agent = agent_registry[session_id]
     logs = agent.get_logs(limit)
+    logger.info(f"GET /logs/{session_id}: returning {len(logs)} logs (agent running={agent.is_running()})")
 
     return {
         "logs": logs,

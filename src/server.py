@@ -175,9 +175,15 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
                     coin = pos.get('coin')
                     if coin:
                         current_px = await hyperliquid.get_current_price(coin)
+                        szi = pos.get('szi', 0)
+                        if szi != 0:  # Only log non-zero positions
+                            side = "LONG" if szi > 0 else "SHORT"
+                            pnl = round_or_none(pos.get('pnl'), 4) or 0
+                            log(f"Position {coin}: {side} {abs(szi):.6f} @ ${round_or_none(pos.get('entryPx'), 2)} | PnL: ${pnl:.2f}")
+
                         positions.append({
                             "symbol": coin,
-                            "quantity": round_or_none(pos.get('szi'), 6),
+                            "quantity": round_or_none(szi, 6),
                             "entry_price": round_or_none(pos.get('entryPx'), 2),
                             "current_price": round_or_none(current_px, 2),
                             "unrealized_pnl": round_or_none(pos.get('pnl'), 4),
@@ -266,6 +272,11 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
                     if not isinstance(outputs, dict):
                         log(f"Invalid output format: {outputs}")
                         outputs = {}
+                    else:
+                        # Log the LLM reasoning summary so frontend can display it
+                        summary = outputs.get("summary", "")
+                        if summary:
+                            log(f"LLM reasoning summary: {summary}")
                 except Exception as e:
                     log(f"Agent error: {e}")
                     outputs = {}
@@ -279,6 +290,10 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
 
                         action = output.get("action")
                         rationale = output.get("rationale", "")
+                        exit_plan = output.get("exit_plan", "")
+
+                        # Log decision rationale for frontend display
+                        log(f"Decision rationale for {asset}: {rationale}")
 
                         if action in ("buy", "sell"):
                             is_buy = action == "buy"
@@ -290,23 +305,26 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
                             current_price = asset_prices.get(asset, 0)
                             amount = alloc_usd / current_price if current_price > 0 else 0
 
-                            log(f"Executing {action.upper()} {asset}: ${alloc_usd:.2f} ({amount:.6f})")
+                            tp_price = output.get("tp_price")
+                            sl_price = output.get("sl_price")
+
+                            log(f"Executing {action.upper()} {asset}: ${alloc_usd:.2f} @ ${current_price:.2f} | TP: {tp_price} | SL: {sl_price}")
 
                             if is_buy:
                                 order = await hyperliquid.place_buy_order(asset, amount)
                             else:
                                 order = await hyperliquid.place_sell_order(asset, amount)
 
-                            log(f"Order result: {order}")
+                            log(f"Order result for {asset}: {order}")
 
                             # Place TP/SL if specified
-                            if output.get("tp_price"):
-                                await hyperliquid.place_take_profit(asset, is_buy, amount, output["tp_price"])
-                                log(f"TP placed at {output['tp_price']}")
+                            if tp_price:
+                                await hyperliquid.place_take_profit(asset, is_buy, amount, tp_price)
+                                log(f"{asset} TP placed at ${tp_price}")
 
-                            if output.get("sl_price"):
-                                await hyperliquid.place_stop_loss(asset, is_buy, amount, output["sl_price"])
-                                log(f"SL placed at {output['sl_price']}")
+                            if sl_price:
+                                await hyperliquid.place_stop_loss(asset, is_buy, amount, sl_price)
+                                log(f"{asset} SL placed at ${sl_price}")
 
                             trade_log.append({
                                 "asset": asset,
@@ -315,7 +333,7 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
                                 "price": current_price,
                             })
                         else:
-                            log(f"HOLD {asset}: {rationale[:100] if rationale else 'No rationale'}")
+                            log(f"HOLD {asset}: {rationale}")
 
                     except Exception as e:
                         log(f"Execution error {asset}: {e}")

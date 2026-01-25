@@ -77,14 +77,26 @@ export default function TradesDashboard({
   const [showClearButton, setShowClearButton] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [displayedMessages, setDisplayedMessages] = useState(messages);
-  const { symbol: currencySymbol } = useCurrency();
+  const [newMessageIds, setNewMessageIds] = useState<Set<string | number>>(new Set());
+  const { symbol: currencySymbol} = useCurrency();
 
   // Update displayed messages when messages prop changes (but not when clearing)
   useEffect(() => {
     if (!isClearing) {
+      // Track which messages are new
+      const currentIds = new Set(displayedMessages.map(m => m.id));
+      const incoming = messages.filter(m => !currentIds.has(m.id));
+      const incomingIds = new Set(incoming.map(m => m.id));
+
+      setNewMessageIds(incomingIds);
       setDisplayedMessages(messages);
+
+      // Clear new message IDs after animation completes
+      if (incomingIds.size > 0) {
+        setTimeout(() => setNewMessageIds(new Set()), 600);
+      }
     }
-  }, [messages, isClearing]);
+  }, [messages, isClearing, displayedMessages]);
 
   const handleClearMessagesWithAnimation = () => {
     if (!onClearMessages || messages.length === 0) return;
@@ -229,9 +241,10 @@ export default function TradesDashboard({
             ) : (
               displayedMessages.map((msg, index) => {
                 const baseClasses = "bg-gray-50/80 rounded-2xl border border-gray-100 shadow-sm p-4 xl:p-5";
+                const isNewMessage = newMessageIds.has(msg.id);
                 const animationClass = isClearing
                   ? "animate-android-swipe-right"
-                  : (index === 0 ? "animate-android-notification" : "");
+                  : (isNewMessage ? "animate-android-notification" : "");
 
                 // Add staggered delay when clearing - last message disappears first
                 const animationDelay = isClearing ? `${(displayedMessages.length - 1 - index) * 0.1}s` : '0s';

@@ -19,6 +19,7 @@
     "lenis": "^1.3.17",
     "lightweight-charts": "^5.1.0",
     "next": "16.1.2",
+    "ogl": "^1.0.11",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "tailwind-merge": "^3.4.0",

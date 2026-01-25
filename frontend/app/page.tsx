@@ -14,13 +14,17 @@ import HomeHero from '@/components/HomeHero';
 import Navbar from '@/components/Navbar';
 import AggregateBar from '@/components/AggregateBar';
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 export default function Home() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const searchParams = useSearchParams();
+  const symbolParam = searchParams.get('symbol');
+
+  const [isLoggedIn, setIsLoggedIn] = useState(true);
   const [leftWidth, setLeftWidth] = useState(75);
   const [isDragging, setIsDragging] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
-  const [selectedSymbol, setSelectedSymbol] = useState('PORTFOLIO');
+  const [selectedSymbol, setSelectedSymbol] = useState(symbolParam || 'PORTFOLIO');
 
   // Agent state
   const [isAgentRunning, setIsAgentRunning] = useState(false);
@@ -46,6 +50,13 @@ export default function Home() {
 
   const isPortfolioView = selectedSymbol === 'PORTFOLIO';
   const [portfolioTab, setPortfolioTab] = useState<'config' | 'growth' | 'settings'>('config');
+
+  // Update selectedSymbol when URL parameter changes
+  useEffect(() => {
+    if (symbolParam) {
+      setSelectedSymbol(symbolParam);
+    }
+  }, [symbolParam]);
 
   const handleLogin = () => {
     setIsLoggedIn(true);

@@ -6,6 +6,7 @@ import PortfolioSidebar from '@/components/PortfolioSidebar';
 import Navbar from '@/components/Navbar';
 import AggregateBar from '@/components/AggregateBar';
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface LeaderboardEntry {
   rank: number;
@@ -49,6 +50,7 @@ function formatLargeNumber(num: number): string {
 }
 
 export default function LeaderboardPage() {
+  const router = useRouter();
   const [leftWidth, setLeftWidth] = useState(75);
   const [isDragging, setIsDragging] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -64,6 +66,10 @@ export default function LeaderboardPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [stats, setStats] = useState<AgentStats | undefined>(undefined);
   const lastEntryTimestamp = useRef<string | null>(null);
+
+  const handleAssetSelect = (symbol: string) => {
+    router.push(`/?symbol=${symbol}`);
+  };
 
   const handleMouseDown = () => {
     setIsDragging(true);
@@ -178,7 +184,7 @@ export default function LeaderboardPage() {
         <div className="hidden lg:block shrink-0">
           <PortfolioSidebar
             selectedSymbol={selectedSymbol}
-            onAssetSelect={setSelectedSymbol}
+            onAssetSelect={handleAssetSelect}
           />
         </div>
 

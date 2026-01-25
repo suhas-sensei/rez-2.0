@@ -41,7 +41,7 @@ export default function Navbar() {
             <span className="text-gray-300">|</span>
             <Link href="/blog" className="hover:text-gray-600">BLOG</Link>
             <span className="text-gray-300">|</span>
-            <Link href="/models" className="hover:text-gray-600">ABOUT US</Link>
+            <Link href="/about" className="hover:text-gray-600">ABOUT US</Link>
               <span className="text-gray-300">|</span>
           </div>
 
@@ -55,7 +55,7 @@ export default function Navbar() {
               <Link href="/live" className="text-base font-medium hover:text-gray-600" onClick={() => setIsMenuOpen(false)}>LIVE</Link>
               <Link href="/leaderboard" className="text-base font-medium hover:text-gray-600" onClick={() => setIsMenuOpen(false)}>LEADERBOARD</Link>
               <Link href="/blog" className="text-base font-medium hover:text-gray-600" onClick={() => setIsMenuOpen(false)}>BLOG</Link>
-              <Link href="/models" className="text-base font-medium hover:text-gray-600" onClick={() => setIsMenuOpen(false)}>MODELS</Link>
+              <Link href="/about" className="text-base font-medium hover:text-gray-600" onClick={() => setIsMenuOpen(false)}>ABOUT US</Link>
               <hr className="border-gray-200" />
               <Link href="/waitlist" className="text-sm font-medium hover:text-gray-600 flex items-center gap-1 font-inter" onClick={() => setIsMenuOpen(false)}>
                 JOIN THE REZ WAITLIST

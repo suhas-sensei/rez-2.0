@@ -13,10 +13,10 @@ import AccountSettings from '@/components/AccountSettings';
 import MarketingLanding from '@/components/MarketingLanding';
 import Navbar from '@/components/Navbar';
 import AggregateBar from '@/components/AggregateBar';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-export default function Home() {
+function HomeContent() {
   const searchParams = useSearchParams();
   const symbolParam = searchParams.get('symbol');
 
@@ -517,5 +517,13 @@ export default function Home() {
         {isDragging && <div className="fixed inset-0 cursor-col-resize z-50" />}
       </main>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <HomeContent />
+    </Suspense>
   );
 }

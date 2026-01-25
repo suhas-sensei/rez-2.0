@@ -26,12 +26,29 @@ function HomeContent() {
   const [isDesktop, setIsDesktop] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState(symbolParam || 'PORTFOLIO');
 
-  // Check localStorage for login state on mount
+  // Check localStorage for login state AND verify session exists on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('isLoggedIn');
       if (stored === 'true') {
-        setIsLoggedIn(true);
+        // Verify session is still valid by checking wallet endpoint
+        fetch('/api/wallet')
+          .then(res => res.json())
+          .then(data => {
+            if (data.address) {
+              setIsLoggedIn(true);
+              setWalletAddress(data.address);
+            } else {
+              // Session expired, clear localStorage
+              localStorage.removeItem('isLoggedIn');
+              setIsLoggedIn(false);
+            }
+          })
+          .catch(() => {
+            // Session check failed, clear localStorage
+            localStorage.removeItem('isLoggedIn');
+            setIsLoggedIn(false);
+          });
       }
     }
   }, []);
@@ -223,10 +240,12 @@ function HomeContent() {
           timestamp: new Date().toLocaleString(),
         }, ...prev]);
       } else {
+        // Show actual error message
+        const errorMsg = data.error || 'Failed to start agent';
         setMessages(prev => [{
           id: Date.now(),
-          type: 'info',
-          message: 'Agent under maintenance, check back in a few minutes.',
+          type: 'error',
+          message: errorMsg,
           timestamp: new Date().toLocaleString(),
         }, ...prev]);
       }
@@ -234,8 +253,8 @@ function HomeContent() {
       console.error('Failed to start agent:', error);
       setMessages(prev => [{
         id: Date.now(),
-        type: 'info',
-        message: 'Agent under maintenance, check back in a few minutes.',
+        type: 'error',
+        message: 'Network error: Could not connect to backend server.',
         timestamp: new Date().toLocaleString(),
       }, ...prev]);
     }

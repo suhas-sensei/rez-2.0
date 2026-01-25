@@ -23,11 +23,20 @@ export async function POST(request: Request) {
       session = await getFullSession();
     } catch (err) {
       console.error('Failed to get session:', err);
+      return NextResponse.json({
+        error: 'Session error. Please clear your browser data and login again with your invite code.',
+        details: String(err),
+      }, { status: 401 });
     }
 
     if (!session) {
-      return NextResponse.json({ error: 'Not authenticated. Please login with invite code.' }, { status: 401 });
+      console.log('No session found - user needs to login with invite code');
+      return NextResponse.json({
+        error: 'Not authenticated. Please enter your invite code to login first.',
+      }, { status: 401 });
     }
+
+    console.log(`Starting agent for session: ${session.sessionId}`);
 
     // Call backend to start agent
     const response = await fetch(`${BACKEND_URL}/start-agent`, {

@@ -48,6 +48,10 @@ export default function AboutPage() {
     router.push(`/?symbol=${symbol}`);
   };
 
+  const handleClearMessages = () => {
+    setMessages([]);
+  };
+
   const handleMouseDown = () => {
     setIsDragging(true);
   };
@@ -207,6 +211,7 @@ export default function AboutPage() {
             trades={trades}
             stats={stats}
             isAgentRunning={isAgentRunning}
+            onClearMessages={handleClearMessages}
           />
         </div>
 

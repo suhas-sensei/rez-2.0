@@ -71,6 +71,10 @@ export default function LeaderboardPage() {
     router.push(`/?symbol=${symbol}`);
   };
 
+  const handleClearMessages = () => {
+    setMessages([]);
+  };
+
   const handleMouseDown = () => {
     setIsDragging(true);
   };
@@ -315,6 +319,7 @@ export default function LeaderboardPage() {
             trades={trades}
             stats={stats}
             isAgentRunning={isAgentRunning}
+            onClearMessages={handleClearMessages}
           />
         </div>
 

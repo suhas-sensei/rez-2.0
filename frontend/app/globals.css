@@ -159,3 +159,42 @@ html, body {
 .shiny-text {
   animation: shiny-text 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
+
+/* Android Notification Animation */
+@keyframes androidNotification {
+  0% {
+    transform: translateY(-120px);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(8px);
+    opacity: 1;
+  }
+  80% {
+    transform: translateY(-4px);
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-android-notification {
+  animation: androidNotification 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Android Swipe Right Dismiss Animation */
+@keyframes androidSwipeRight {
+  0% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(150%);
+    opacity: 0;
+  }
+}
+
+.animate-android-swipe-right {
+  animation: androidSwipeRight 0.5s ease-out forwards !important;
+}

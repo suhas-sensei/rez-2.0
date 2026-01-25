@@ -214,8 +214,8 @@ export default function Home() {
       } else {
         setMessages(prev => [{
           id: Date.now(),
-          type: 'error',
-          message: `Failed to start agent: ${data.error || 'Unknown error'}`,
+          type: 'info',
+          message: 'Agent under maintenance, check back in a few minutes.',
           timestamp: new Date().toLocaleString(),
         }, ...prev]);
       }
@@ -223,8 +223,8 @@ export default function Home() {
       console.error('Failed to start agent:', error);
       setMessages(prev => [{
         id: Date.now(),
-        type: 'error',
-        message: 'Failed to start agent. Check console for details.',
+        type: 'info',
+        message: 'Agent under maintenance, check back in a few minutes.',
         timestamp: new Date().toLocaleString(),
       }, ...prev]);
     }
@@ -251,6 +251,10 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to stop agent:', error);
     }
+  };
+
+  const handleClearMessages = () => {
+    setMessages([]);
   };
 
   const handlePauseAgent = async () => {
@@ -494,6 +498,7 @@ export default function Home() {
             trades={trades}
             stats={stats}
             isAgentRunning={isAgentRunning}
+            onClearMessages={handleClearMessages}
           />
         </div>
 

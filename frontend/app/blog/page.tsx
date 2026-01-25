@@ -29,6 +29,10 @@ export default function BlogPage() {
     router.push(`/?symbol=${symbol}`);
   };
 
+  const handleClearMessages = () => {
+    setMessages([]);
+  };
+
   const handleMouseDown = () => {
     setIsDragging(true);
   };
@@ -177,6 +181,7 @@ export default function BlogPage() {
             trades={trades}
             stats={stats}
             isAgentRunning={isAgentRunning}
+            onClearMessages={handleClearMessages}
           />
         </div>
 

@@ -62,6 +62,9 @@ export default function AgentController({
   onAssetsChange,
   selectedInterval,
   onIntervalChange,
+  positionsCount = 0,
+  onCloseAllPositions,
+  isClosingPositions = false,
 }: AgentControllerProps) {
 
   const toggleAsset = (symbol: string) => {
@@ -154,14 +157,30 @@ export default function AgentController({
         </div>
 
         {/* Summary line */}
-        <div className="mt-5 pt-4 border-t border-gray-100">
-          <p className="text-xs text-gray-400">
+        <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between">
+          <p className="text-sm text-gray-400">
             Profile: <span className={`${PROFILE_COLORS[selectedProfile]} font-medium`}>{PROFILE_NAMES[selectedProfile]}</span>
             <span className="mx-2 text-gray-300">|</span>
             Assets: <span className="text-gray-600 font-medium">{selectedAssets.join(', ')}</span>
             <span className="mx-2 text-gray-300">|</span>
             Interval: <span className="text-gray-600 font-medium">{getIntervalLabel(selectedInterval)}</span>
           </p>
+
+          {/* Close All Positions Button */}
+          {onCloseAllPositions && (
+            <button
+              onClick={onCloseAllPositions}
+              disabled={isClosingPositions || positionsCount === 0}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-gray-50 rounded-lg border border-gray-200 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className={`w-4 h-4 ${positionsCount > 0 ? 'text-orange-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              <span className={`text-sm font-medium ${positionsCount > 0 ? 'text-orange-600' : 'text-gray-500'}`}>
+                {isClosingPositions ? 'Closing...' : 'Close All Positions'}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 

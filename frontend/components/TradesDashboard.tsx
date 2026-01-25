@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCurrency } from '@/context/CurrencyContext';
 
 const TABS = ['MODELCHAT', 'POSITIONS', 'COMPLETED TRADES', 'AGENT STATS'];
@@ -54,6 +54,7 @@ interface TradesDashboardProps {
   messages?: AgentMessage[];
   stats?: AgentStats;
   isAgentRunning?: boolean;
+  onClearMessages?: () => void;
 }
 
 // Default placeholder data
@@ -67,12 +68,35 @@ export default function TradesDashboard({
   messages = DEFAULT_MESSAGES,
   stats,
   isAgentRunning = false,
+  onClearMessages,
 }: TradesDashboardProps) {
   const [activeTab, setActiveTab] = useState('MODELCHAT');
   const [isClosingPositions, setIsClosingPositions] = useState(false);
   const [closingPositionId, setClosingPositionId] = useState<string | number | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
+  const [showClearButton, setShowClearButton] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [displayedMessages, setDisplayedMessages] = useState(messages);
   const { symbol: currencySymbol } = useCurrency();
+
+  // Update displayed messages when messages prop changes (but not when clearing)
+  useEffect(() => {
+    if (!isClearing) {
+      setDisplayedMessages(messages);
+    }
+  }, [messages, isClearing]);
+
+  const handleClearMessagesWithAnimation = () => {
+    if (!onClearMessages || messages.length === 0) return;
+
+    setIsClearing(true);
+    // Wait for animation to complete before clearing
+    setTimeout(() => {
+      onClearMessages();
+      setDisplayedMessages([]);
+      setIsClearing(false);
+    }, 550);
+  };
 
   const handleCloseAllPositions = async () => {
     if (positions.length === 0) return;
@@ -173,12 +197,22 @@ export default function TradesDashboard({
               </>
             )}
           </div>
-          <span className="text-xs xl:text-sm 2xl:text-base text-gray-500">
-            {activeTab === 'COMPLETED TRADES' && `${trades.length} Trades`}
-            {activeTab === 'POSITIONS' && `${positions.length} Open Positions`}
-            {activeTab === 'MODELCHAT' && `${messages.length} Messages`}
-            {activeTab === 'AGENT STATS' && 'Performance Metrics'}
-          </span>
+          {activeTab === 'MODELCHAT' ? (
+            <span
+              className="text-xs xl:text-sm 2xl:text-base text-gray-500 cursor-pointer hover:text-red-500 transition-colors"
+              onMouseEnter={() => setShowClearButton(true)}
+              onMouseLeave={() => setShowClearButton(false)}
+              onClick={handleClearMessagesWithAnimation}
+            >
+              {showClearButton && messages.length > 0 ? 'Clear Messages' : `${messages.length} Messages`}
+            </span>
+          ) : (
+            <span className="text-xs xl:text-sm 2xl:text-base text-gray-500">
+              {activeTab === 'COMPLETED TRADES' && `${trades.length} Trades`}
+              {activeTab === 'POSITIONS' && `${positions.length} Open Positions`}
+              {activeTab === 'AGENT STATS' && 'Performance Metrics'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -186,25 +220,36 @@ export default function TradesDashboard({
       <div className="w-full px-2 sm:px-3 xl:px-6 py-3 xl:py-5 overflow-auto flex-1">
         {/* MODELCHAT */}
         {activeTab === 'MODELCHAT' && (
-          <div className="space-y-3 xl:space-y-4">
-            {messages.length === 0 ? (
+          <div className="space-y-3 xl:space-y-4 overflow-x-hidden">
+            {displayedMessages.length === 0 ? (
               <div className="text-center py-10 text-gray-400">
                 <p className="text-sm">No messages yet</p>
                 <p className="text-xs mt-1">Agent activity will appear here</p>
               </div>
             ) : (
-              messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className="bg-gray-50/80 rounded-2xl border border-gray-100 shadow-sm p-4 xl:p-5"
-                >
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-[10px] xl:text-xs font-medium text-gray-600">Agent Rez</span>
-                    <span className="text-[10px] xl:text-xs text-gray-400">{msg.timestamp}</span>
+              displayedMessages.map((msg, index) => {
+                const baseClasses = "bg-gray-50/80 rounded-2xl border border-gray-100 shadow-sm p-4 xl:p-5";
+                const animationClass = isClearing
+                  ? "animate-android-swipe-right"
+                  : (index === 0 ? "animate-android-notification" : "");
+
+                // Add staggered delay when clearing - last message disappears first
+                const animationDelay = isClearing ? `${(displayedMessages.length - 1 - index) * 0.1}s` : '0s';
+
+                return (
+                  <div
+                    key={`${msg.id}-${msg.timestamp}`}
+                    className={`${baseClasses} ${animationClass}`}
+                    style={{ animationDelay }}
+                  >
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] xl:text-xs font-medium text-gray-600">Agent Rez</span>
+                      <span className="text-[10px] xl:text-xs text-gray-400">{msg.timestamp}</span>
+                    </div>
+                    <p className="text-[10px] sm:text-xs xl:text-sm text-gray-400 leading-relaxed">{msg.message}</p>
                   </div>
-                  <p className="text-[10px] sm:text-xs xl:text-sm text-gray-400 leading-relaxed">{msg.message}</p>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

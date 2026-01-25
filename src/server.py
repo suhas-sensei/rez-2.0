@@ -145,7 +145,10 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
     initial_account_value = None
 
     log(f"Agent started for session with assets: {config.assets}, interval: {config.interval}")
-    log(f"Wallet: {config.public_key}")
+    log(f"Config wallet: {config.public_key}")
+    log(f"HyperliquidAPI wallet: {hyperliquid.wallet.address}")
+    log(f"HyperliquidAPI account: {hyperliquid.account_address}")
+    log(f"Risk profile: {config.risk_profile}")
 
     async def run_loop():
         nonlocal invocation_count, initial_account_value

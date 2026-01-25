@@ -9,7 +9,10 @@
       "Bash(pgrep:*)",
       "Bash(pkill:*)",
       "Bash(python3:*)",
-      "Bash(poetry lock:*)"
+      "Bash(poetry lock:*)",
+      "Bash(kill:*)",
+      "Bash(npm run dev:*)",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }

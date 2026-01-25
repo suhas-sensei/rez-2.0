@@ -10,7 +10,7 @@ import RiskProfileSelector from '@/components/RiskProfileSelector';
 import type { RiskProfile } from '@/components/RiskProfileSelector';
 import AgentController from '@/components/AgentController';
 import AccountSettings from '@/components/AccountSettings';
-import HomeHero from '@/components/HomeHero';
+import MarketingLanding from '@/components/MarketingLanding';
 import Navbar from '@/components/Navbar';
 import AggregateBar from '@/components/AggregateBar';
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -20,11 +20,21 @@ export default function Home() {
   const searchParams = useSearchParams();
   const symbolParam = searchParams.get('symbol');
 
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [leftWidth, setLeftWidth] = useState(75);
   const [isDragging, setIsDragging] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState(symbolParam || 'PORTFOLIO');
+
+  // Check localStorage for login state on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('isLoggedIn');
+      if (stored === 'true') {
+        setIsLoggedIn(true);
+      }
+    }
+  }, []);
 
   // Agent state
   const [isAgentRunning, setIsAgentRunning] = useState(false);
@@ -60,6 +70,7 @@ export default function Home() {
 
   const handleLogin = () => {
     setIsLoggedIn(true);
+    localStorage.setItem('isLoggedIn', 'true');
   };
 
   const handleMouseDown = () => {
@@ -371,9 +382,9 @@ export default function Home() {
     }
   };
 
-  // Show landing page if not logged in
+  // Show marketing landing page if not logged in
   if (!isLoggedIn) {
-    return <HomeHero onLogin={handleLogin} />;
+    return <MarketingLanding onLogin={handleLogin} />;
   }
 
   // Show markets dashboard if logged in

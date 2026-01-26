@@ -1,121 +1,40 @@
-# Nocturne: AI Trading Agent on Hyperliquid
+# Rez 
 
-This project implements an AI-powered trading agent that leverages LLM models to analyze real-time market data from TAAPI, make informed trading decisions, and execute trades on the Hyperliquid decentralized exchange. The agent runs in a continuous loop, monitoring specified cryptocurrency assets at configurable intervals, using technical indicators to decide on buy/sell/hold actions, and manages positions with take-profit and stop-loss orders.
+Rez is an AI-powered autonomous trading system designed for the Hyperliquid decentralized exchange. It integrates advanced Large Language Models (LLMs) with real-time market data and technical indicators to execute sophisticated trading strategies with automated risk management.
 
-## Table of Contents
+## Core Components
 
-- [Disclaimer](#disclaimer)
-- [Architecture](#architecture)
-- [Nocturne Live Agents](#nocturne-live-agents)
-- [Structure](#structure)
-- [Env Configuration](#env-configuration)
-- [Usage](#usage)
-- [Tool Calling](#tool-calling)
-- [Deployment to EigenCloud](#deployment-to-eigencloud)
+### Trading Agent
+The heart of Rez Computation is its autonomous trading agent. It utilizes a Reasoning and Acting (ReAct) loop to:
+- Analyze Market Data: Ingests real-time price action and technical indicators.
+- LLM Reasoning: Leverages GPT-4o to evaluate market conditions and form a trading thesis.
+- Autonomous Execution: Executes trades including buys, sells, and position management directly on-chain.
+- Dynamic Tool-Calling: Fetches additional technical data on-demand during the decision process.
 
-## Disclaimer
+### Monitoring Dashboard
+A real-time, web-based dashboard provides full visibility into the system's operations:
+- Live Performance: Track PnL, open positions, and account balance in real-time.
+- Reasoning Logs: View the "Internal Monologue" of the AI agent for every trade decision.
+- Transaction History: Audit all fills and order placements on the Hyperliquid exchange.
+- Track Record : Additional stats like win rate, average trade, volume etc. for records.
 
-There is no guarantee of any returns. This code has not been audited. Please use at your own risk.
+## Architectural Orchestration
 
-## Architecture
+Rez operates as a synchronized ecosystem where deterministic data meets stochastic reasoning. The orchestration follows a continuous, multi-stage lifecycle:
 
-See the full [Architecture Documentation](docs/ARCHITECTURE.md) for subsystems, data flow, and design principles.
+1.  Data Ingestion & Normalization: The backend continuously polls market data (OHLCV klines) from external sources. It calculates technical indicators (RSI, EMA, MACD, ATR) locally using a high-precision calculation engine, ensuring the data is "warmed up" and mathematically accurate.
+2.  Context Synthesis: This raw market data is combined with the current account state (equity, position size, PnL) and injected into a structured "Context Payload."
+3.  The ReAct Reasoning Loop: 
+    - The Trading Agent dispatches this context to a high-reasoning LLM (e.g., GPT-4o).
+    - The LLM performs an internal "Chain of Thought" analysis. If it needs more specific data to confirm a signal, it uses Tool-Calling to query the backend for targeted technical indicators.
+    - This recursive loop repeats until the model reaches a high-confluence trade decision.
+4.  On-Chain Execution: Once a decision is reached (Buy/Sell/Close), the backend translates the thesis into signed transactions on the Hyperliquid exchange, immediately followed by sub-second placement of Take-Profit and Stop-Loss trigger orders.
+5.  State Persistence & Visualization: Every detail of the cycle—from the raw prompt to the agent's verbose reasoning and the final execution results—is streamed to a local diary.jsonl store. The Monitoring Dashboard consumes this stream via an API, providing the end-user with a real-time window into the agent's mind and performance.
 
-![Architecture Diagram](docs/architecture.png)
+## Tech Stack
 
-## Nocturne Live Agents 
-
-- GPT-5 Pro: [Portfolio Dashboard](https://hypurrscan.io/address/0xa049db4b3dfcb25c3092891010a629d987d26113) | [Live Logs](https://35.190.43.182/logs/0xC0BE8E55f469c1a04c0F6d04356828C5793d8a9D) (Seeded with $200)
-- DeepSeek R1: [Portfolio Dashboard](https://hypurrscan.io/address/0xa663c80d86fd7c045d9927bb6344d7a5827d31db) | [Live Logs](https://35.190.43.182/logs/0x4da68B78ef40D12f378b8498120f2F5A910Af1aD) (Seeded with $100) -- PAUSED
-- Grok 4: [Portfolio Dashboard](https://hypurrscan.io/address/0x3c71f3cf324d0133558c81d42543115ef1a2be79) | [Live Logs](https://35.190.43.182/logs/0xe6a9f97f99847215ea5813812508e9354a22A2e0) (Seeded with $100) -- PAUSED
-
-## Structure
-- `src/main.py`: Entry point, handles user input and main trading loop.
-- `src/agent/decision_maker.py`: LLM logic for trade decisions (OpenRouter with tool calling for TAAPI indicators).
-- `src/indicators/taapi_client.py`: Fetches indicators from TAAPI.
-- `src/trading/hyperliquid_api.py`: Executes trades on Hyperliquid.
-- `src/config_loader.py`: Centralized config loaded from `.env`.
-
-## Env Configuration
-Populate `.env` (use `.env.example` as reference):
-- TAAPI_API_KEY
-- HYPERLIQUID_PRIVATE_KEY (or LIGHTER_PRIVATE_KEY)
-- OPENROUTER_API_KEY
-- LLM_MODEL 
-- Optional: OPENROUTER_BASE_URL (`https://openrouter.ai/api/v1`), OPENROUTER_REFERER, OPENROUTER_APP_TITLE
-
-### Obtaining API Keys
-- **TAAPI_API_KEY**: Sign up at [TAAPI.io](https://taapi.io/) and generate an API key from your dashboard.
-- **HYPERLIQUID_PRIVATE_KEY**: Generate an Ethereum-compatible private key for Hyperliquid. Use tools like MetaMask or `eth_account` library. For security, never share this key.
-- **OPENROUTER_API_KEY**: Create an account at [OpenRouter.ai](https://openrouter.ai/), then generate an API key in your account settings.
-- **LLM_MODEL**: No key needed; specify a model name like "x-ai/grok-4" (see OpenRouter models list).
-
-## Usage
-Run: `poetry run python src/main.py --assets BTC ETH --interval 1h`
-
-### Local API Endpoints
-When the agent runs, it also serves a minimal API:
-- `GET /diary?limit=200` — returns recent JSONL diary entries as JSON.
-- `GET /logs?path=llm_requests.log&limit=2000` — tails the specified log file.
-
-Configure bind host/port via env:
-- `API_HOST` (default `0.0.0.0`)
-- `API_PORT` or `APP_PORT` (default `3000`)
-
-Docker:
-```bash
-docker build --platform linux/amd64 -t trading-agent .
-docker run --rm -p 3000:3000 --env-file .env trading-agent
-# Now: curl http://localhost:3000/diary
-```
-
-## Tool Calling
-The agent can dynamically fetch any TAAPI indicator (e.g., EMA, RSI) via tool calls. See [TAAPI Indicators](https://taapi.io/indicators/) and [EMA Example](https://taapi.io/indicators/exponential-moving-average/) for details.
-
-## Deployment to EigenCloud
-
-EigenCloud (via EigenX CLI) allows deploying this trading agent in a Trusted Execution Environment (TEE) with secure key management.
-
-### Prerequisites
-- Allowlisted Ethereum account (Sepolia for testnet). Request onboarding at [EigenCloud Onboarding](https://onboarding.eigencloud.xyz).
-- Docker installed.
-- Sepolia ETH for deployments.
-
-### Installation
-#### macOS/Linux
-```bash
-curl -fsSL https://eigenx-scripts.s3.us-east-1.amazonaws.com/install-eigenx.sh | bash
-```
-
-#### Windows
-```bash
-curl -fsSL https://eigenx-scripts.s3.us-east-1.amazonaws.com/install-eigenx.ps1 | powershell -
-```
-
-### Initial Setup
-```bash
-docker login
-eigenx auth login  # Or eigenx auth generate --store (if you don't have a eth account, keep this account separate from your trading account)
-```
-
-### Deploy the Agent
-From the project directory:
-```bash
-cp .env.example .env
-# Edit .env: set ASSETS, INTERVAL, API keys
-eigenx app deploy
-```
-
-### Monitoring
-```bash
-eigenx app info --watch
-eigenx app logs --watch
-```
-
-### Updates
-Edit code or .env, then:
-```bash
-eigenx app upgrade <app-name>
-```
-
-For full CLI reference, see the [EigenX Documentation](https://github.com/Layr-Labs/eigenx-cli).
+- Backend: Python-based asynchronous trading engine.
+- Frontend: Next.js & React-powered monitoring interface with advanced 3D visualizations, with realtime market data from [Trading View](https://www.tradingview.com/).
+- AI Engine: Integrated with multiple LLMs via OpenRouter for high-fidelity reasoning.
+- Infrastructure: Optimized for deployment in Trusted Execution Environments (TEE) like EigenCloud.
+- Exchange Interface: Native integration with the Hyperliquid SDK (testnet).

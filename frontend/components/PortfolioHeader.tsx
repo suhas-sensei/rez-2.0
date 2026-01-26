@@ -75,22 +75,6 @@ export default function PortfolioHeader({
             </button>
           )}
 
-          {/* Close All Positions */}
-          {onCloseAllPositions && (
-            <button
-              onClick={onCloseAllPositions}
-              disabled={isClosingPositions || positionsCount === 0}
-              className="flex items-center justify-center gap-2 px-5 py-3 xl:py-4 bg-gray-50/80 hover:bg-gray-100 rounded-2xl border border-gray-100 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg className={`w-5 h-5 ${positionsCount > 0 ? 'text-orange-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              <span className={`text-sm xl:text-base font-medium ${positionsCount > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
-                {isClosingPositions ? 'Closing...' : `Close All${positionsCount > 0 ? ` (${positionsCount})` : ''}`}
-              </span>
-            </button>
-          )}
-
           <div className="flex bg-gray-50/80 rounded-2xl py-3 xl:py-4 shadow-sm border border-gray-100 ml-6">
           {/* Balance */}
           <div className="text-center px-4 xl:px-5 flex flex-col justify-center">

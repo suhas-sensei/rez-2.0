@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Wallet } from 'ethers';
-import fs from 'fs';
-import path from 'path';
+import { getWalletFromSession } from '@/lib/session';
 
 interface AssetPosition {
   position: {
@@ -17,29 +16,15 @@ interface AssetPosition {
   };
 }
 
-// Get active wallet from runtime config or fallback to env
-function getActiveWallet(): { privateKey: string; publicKey: string } | null {
-  const runtimeConfigPath = path.join(process.cwd(), '.runtime-wallet.json');
-  try {
-    if (fs.existsSync(runtimeConfigPath)) {
-      const data = fs.readFileSync(runtimeConfigPath, 'utf-8');
-      return JSON.parse(data);
-    }
-  } catch {
-    // Fallback to env
-  }
-  return null;
-}
-
 export async function GET() {
   const network = process.env.HYPERLIQUID_NETWORK || 'mainnet';
 
-  // Check runtime config first, then fall back to env
-  const runtimeWallet = getActiveWallet();
+  // Get wallet from session (per-user)
+  const sessionWallet = await getWalletFromSession();
 
   let queryAddress: string;
-  if (runtimeWallet?.publicKey) {
-    queryAddress = runtimeWallet.publicKey;
+  if (sessionWallet?.publicKey) {
+    queryAddress = sessionWallet.publicKey;
   } else if (process.env.HYPERLIQUID_ACCOUNT_ADDRESS) {
     queryAddress = process.env.HYPERLIQUID_ACCOUNT_ADDRESS;
   } else if (process.env.HYPERLIQUID_PRIVATE_KEY) {

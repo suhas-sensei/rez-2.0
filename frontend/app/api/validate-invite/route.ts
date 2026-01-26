@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { createSession, SESSION_COOKIE_NAME } from '@/lib/session';
 
 // Wallet configurations mapped by invite code
 const WALLET_CONFIGS: Record<string, { privateKey: string; publicKey: string }> = {
@@ -18,21 +17,6 @@ const WALLET_CONFIGS: Record<string, { privateKey: string; publicKey: string }> 
   },
 };
 
-// Runtime config file path (used for session-based wallet switching)
-const RUNTIME_CONFIG_PATH = path.join(process.cwd(), '.runtime-wallet.json');
-
-export function getActiveWalletConfig(): { privateKey: string; publicKey: string } | null {
-  try {
-    if (fs.existsSync(RUNTIME_CONFIG_PATH)) {
-      const data = fs.readFileSync(RUNTIME_CONFIG_PATH, 'utf-8');
-      return JSON.parse(data);
-    }
-  } catch {
-    // Fallback to env
-  }
-  return null;
-}
-
 export async function POST(request: Request) {
   try {
     const { inviteCode } = await request.json();
@@ -48,44 +32,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid invite code' }, { status: 401 });
     }
 
-    // Write to runtime config file for immediate use
-    try {
-      fs.writeFileSync(RUNTIME_CONFIG_PATH, JSON.stringify(walletConfig, null, 2));
-    } catch (fileError) {
-      console.error('Failed to write runtime config:', fileError);
-    }
+    // Create a session for this user
+    const sessionId = createSession(walletConfig, upperCode);
 
-    // Also update the main .env file
-    const envPath = path.join(process.cwd(), '..', '.env');
-    try {
-      let envContent = '';
-      if (fs.existsSync(envPath)) {
-        envContent = fs.readFileSync(envPath, 'utf-8');
-      }
-
-      const updates: Record<string, string> = {
-        'HYPERLIQUID_PRIVATE_KEY': walletConfig.privateKey,
-        'HYPERLIQUID_ACCOUNT_ADDRESS': walletConfig.publicKey,
-      };
-
-      for (const [key, value] of Object.entries(updates)) {
-        const regex = new RegExp(`^${key}=.*$`, 'm');
-        if (regex.test(envContent)) {
-          envContent = envContent.replace(regex, `${key}=${value}`);
-        } else {
-          envContent += `\n${key}=${value}`;
-        }
-      }
-
-      fs.writeFileSync(envPath, envContent.trim() + '\n');
-    } catch (fileError) {
-      console.error('Failed to update .env file:', fileError);
-    }
-
-    return NextResponse.json({
+    // Create response with session cookie
+    const response = NextResponse.json({
       success: true,
       walletAddress: walletConfig.publicKey,
     });
+
+    // Set session cookie (httpOnly for security, 24 hour expiry)
+    response.cookies.set(SESSION_COOKIE_NAME, sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60, // 24 hours
+      path: '/',
+    });
+
+    return response;
 
   } catch (error) {
     console.error('Error validating invite code:', error);

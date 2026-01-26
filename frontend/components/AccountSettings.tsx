@@ -6,7 +6,6 @@ import { useCurrency, Currency } from '@/context/CurrencyContext';
 interface AccountSettingsProps {
   walletAddress?: string;
   linkedEmail?: string;
-  memberSince?: string;
   onSave?: (settings: SettingsState) => void;
   onDiscard?: () => void;
 }
@@ -39,7 +38,6 @@ const TIMEZONES = [
 export default function AccountSettings({
   walletAddress = '',
   linkedEmail = 'user.alpha@rez.trade',
-  memberSince = 'October 24, 2023',
   onSave,
   onDiscard,
 }: AccountSettingsProps) {
@@ -140,15 +138,6 @@ export default function AccountSettings({
               </div>
             </div>
 
-            {/* Member Since */}
-            <div>
-              <label className="block text-[10px] xl:text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                Member Since
-              </label>
-              <p className="text-xs xl:text-sm text-gray-700">
-                Active account created on <span className="font-medium">{memberSince}</span>
-              </p>
-            </div>
           </div>
         </section>
 

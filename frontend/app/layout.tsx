@@ -16,8 +16,11 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Trading Agent - AI Trading Dashboard",
-  description: "AI-powered trading agent dashboard for crypto trading",
+  title: "Rez",
+  description: "AI-powered trading agent dashboard on Hyperliquid",
+  icons: {
+    icon: "/rez1.ico",
+  },
 };
 
 export default function RootLayout({

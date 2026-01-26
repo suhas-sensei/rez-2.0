@@ -2,9 +2,13 @@ import { NextResponse } from 'next/server';
 import { readFileSync, existsSync } from 'fs';
 import path from 'path';
 import { Wallet } from 'ethers';
+import { getFullSession } from '@/lib/session';
+
+// Backend API URL (Python server)
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
 // Fetch live position data from Hyperliquid
-async function fetchLiveHyperliquidData(): Promise<{
+async function fetchLiveHyperliquidData(sessionWallet?: { publicKey: string } | null): Promise<{
   accountState: { balance: number; unrealizedPnl: number; marginUsed: number } | null;
   positions: Array<{
     asset: string;
@@ -17,19 +21,26 @@ async function fetchLiveHyperliquidData(): Promise<{
     liquidationPrice?: number;
   }>;
 }> {
-  // Use the main account address if set, otherwise derive from private key
-  const accountAddress = process.env.HYPERLIQUID_ACCOUNT_ADDRESS;
-  const privateKey = process.env.HYPERLIQUID_PRIVATE_KEY;
   const network = process.env.HYPERLIQUID_NETWORK || 'mainnet';
 
-  // Determine which address to query
-  let queryAddress: string;
-  if (accountAddress) {
-    queryAddress = accountAddress;
-  } else if (privateKey) {
-    const wallet = new Wallet(privateKey);
-    queryAddress = wallet.address;
+  // Use session wallet first, then fall back to env vars
+  let queryAddress: string | null = null;
+
+  if (sessionWallet?.publicKey) {
+    queryAddress = sessionWallet.publicKey;
   } else {
+    const accountAddress = process.env.HYPERLIQUID_ACCOUNT_ADDRESS;
+    const privateKey = process.env.HYPERLIQUID_PRIVATE_KEY;
+
+    if (accountAddress) {
+      queryAddress = accountAddress;
+    } else if (privateKey) {
+      const wallet = new Wallet(privateKey);
+      queryAddress = wallet.address;
+    }
+  }
+
+  if (!queryAddress) {
     return { accountState: null, positions: [] };
   }
 
@@ -357,30 +368,45 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
 
+    // Get session for per-user data
+    let session = null;
+    try {
+      session = await getFullSession();
+    } catch (err) {
+      console.error('Failed to get session:', err);
+    }
+
+    // Fetch logs from backend if session exists
+    let backendLogs: string[] = [];
+    if (session) {
+      try {
+        const logsResponse = await fetch(`${BACKEND_URL}/logs/${session.sessionId}?limit=${limit}`);
+        if (logsResponse.ok) {
+          const logsData = await logsResponse.json();
+          backendLogs = logsData.logs || [];
+        }
+      } catch (err) {
+        console.error('Failed to fetch backend logs:', err);
+      }
+    }
+
     const projectRoot = path.resolve(process.cwd(), '..');
     const diaryPath = path.join(projectRoot, 'diary.jsonl');
 
-    if (!existsSync(diaryPath)) {
-      return NextResponse.json({
-        entries: [],
-        completedTrades: [],
-        stats: null,
-        message: 'No diary file found'
-      });
-    }
-
-    const content = readFileSync(diaryPath, 'utf-8');
-    const lines = content.trim().split('\n').filter(line => line.trim());
-
-    // Parse each line as JSON
+    // Parse diary entries if file exists, otherwise use empty array
     const entries: DiaryEntry[] = [];
-    for (const line of lines) {
-      try {
-        const entry = JSON.parse(line) as DiaryEntry;
-        entries.push(entry);
-      } catch {
-        // Skip malformed lines
-        continue;
+    if (existsSync(diaryPath)) {
+      const content = readFileSync(diaryPath, 'utf-8');
+      const lines = content.trim().split('\n').filter(line => line.trim());
+
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line) as DiaryEntry;
+          entries.push(entry);
+        } catch {
+          // Skip malformed lines
+          continue;
+        }
       }
     }
 
@@ -661,7 +687,7 @@ export async function GET(request: Request) {
     // Fallback: Check diary for recent buy/sell entries that haven't been closed
     // usedTradeIds contains timestamps of trades that are part of completed trades
     // Fetch LIVE position and account data from Hyperliquid (real-time)
-    const liveData = await fetchLiveHyperliquidData();
+    const liveData = await fetchLiveHyperliquidData(session);
 
     // Use live positions from Hyperliquid (authoritative source)
     const livePositions: FrontendPosition[] = liveData.positions.map(pos => ({
@@ -687,6 +713,39 @@ export async function GET(request: Request) {
       };
     }
 
+    // Add backend logs as enriched messages (agent output from multi-user backend)
+    for (const log of backendLogs) {
+      // Parse timestamp from log format: [2024-01-01T12:00:00.000Z] message OR 2024-01-01 12:00:00,000 - INFO - message
+      let match = log.match(/^\[([^\]]+)\]\s*(.+)$/);
+      if (match) {
+        enrichedMessages.push({
+          id: `backend-${match[1]}-${Math.random()}`,
+          type: 'reasoning',
+          message: match[2],
+          timestamp: new Date(match[1]).toLocaleString(),
+        });
+      } else {
+        // Try Python logging format: 2024-01-01 12:00:00,000 - LEVEL - message
+        match = log.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}),?\d*\s*-\s*\w+\s*-\s*(.+)$/);
+        if (match) {
+          enrichedMessages.push({
+            id: `backend-${match[1]}-${Math.random()}`,
+            type: 'reasoning',
+            message: match[2],
+            timestamp: new Date(match[1].replace(' ', 'T')).toLocaleString(),
+          });
+        } else if (log.trim()) {
+          // Fallback: just show the log as-is
+          enrichedMessages.push({
+            id: `backend-${Date.now()}-${Math.random()}`,
+            type: 'reasoning',
+            message: log,
+            timestamp: new Date().toLocaleString(),
+          });
+        }
+      }
+    }
+
     return NextResponse.json({
       entries: recentEntries,
       enrichedMessages,
@@ -694,6 +753,7 @@ export async function GET(request: Request) {
       positions: livePositions,
       stats,
       accountState,
+      backendLogs,
     });
   } catch (error) {
     console.error('Failed to read logs:', error);

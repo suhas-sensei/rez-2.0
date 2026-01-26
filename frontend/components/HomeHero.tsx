@@ -68,7 +68,7 @@ export default function HomeHero({ onLogin }: HomeHeroProps) {
           frequency={1}
           warpStrength={1}
           transparent={false}
-          noise={true}
+          noise={0.1}
         />
         {/* Translucent white overlay to lighten the background */}
         <div className="absolute inset-0 bg-white/5" />

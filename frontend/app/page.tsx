@@ -10,17 +10,48 @@ import RiskProfileSelector from '@/components/RiskProfileSelector';
 import type { RiskProfile } from '@/components/RiskProfileSelector';
 import AgentController from '@/components/AgentController';
 import AccountSettings from '@/components/AccountSettings';
-import HomeHero from '@/components/HomeHero';
+import MarketingLanding from '@/components/MarketingLanding';
 import Navbar from '@/components/Navbar';
 import AggregateBar from '@/components/AggregateBar';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 
-export default function Home() {
+function HomeContent() {
+  const searchParams = useSearchParams();
+  const symbolParam = searchParams.get('symbol');
+
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [leftWidth, setLeftWidth] = useState(75);
   const [isDragging, setIsDragging] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
-  const [selectedSymbol, setSelectedSymbol] = useState('PORTFOLIO');
+  const [selectedSymbol, setSelectedSymbol] = useState(symbolParam || 'PORTFOLIO');
+
+  // Check localStorage for login state AND verify session exists on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('isLoggedIn');
+      if (stored === 'true') {
+        // Verify session is still valid by checking wallet endpoint
+        fetch('/api/wallet')
+          .then(res => res.json())
+          .then(data => {
+            if (data.address) {
+              setIsLoggedIn(true);
+              setWalletAddress(data.address);
+            } else {
+              // Session expired, clear localStorage
+              localStorage.removeItem('isLoggedIn');
+              setIsLoggedIn(false);
+            }
+          })
+          .catch(() => {
+            // Session check failed, clear localStorage
+            localStorage.removeItem('isLoggedIn');
+            setIsLoggedIn(false);
+          });
+      }
+    }
+  }, []);
 
   // Agent state
   const [isAgentRunning, setIsAgentRunning] = useState(false);
@@ -47,8 +78,16 @@ export default function Home() {
   const isPortfolioView = selectedSymbol === 'PORTFOLIO';
   const [portfolioTab, setPortfolioTab] = useState<'config' | 'growth' | 'settings'>('config');
 
+  // Update selectedSymbol when URL parameter changes
+  useEffect(() => {
+    if (symbolParam) {
+      setSelectedSymbol(symbolParam);
+    }
+  }, [symbolParam]);
+
   const handleLogin = () => {
     setIsLoggedIn(true);
+    localStorage.setItem('isLoggedIn', 'true');
   };
 
   const handleMouseDown = () => {
@@ -145,10 +184,11 @@ export default function Home() {
             asset: msg.asset,
           }));
 
-          // Check if we have new data
-          const latestTimestamp = data.entries?.[0]?.timestamp;
-          if (latestTimestamp !== lastEntryTimestamp.current) {
-            lastEntryTimestamp.current = latestTimestamp;
+          // Always update messages when we have new enriched messages
+          // Use message count + latest message id to detect changes
+          const messageKey = `${newMessages.length}-${newMessages[0]?.id || ''}`;
+          if (messageKey !== lastEntryTimestamp.current) {
+            lastEntryTimestamp.current = messageKey;
             setMessages(newMessages);
           }
         }
@@ -185,6 +225,7 @@ export default function Home() {
         body: JSON.stringify({
           assets: selectedAssets,
           interval: selectedInterval,
+          riskProfile: selectedProfile,
         }),
       });
 
@@ -199,10 +240,12 @@ export default function Home() {
           timestamp: new Date().toLocaleString(),
         }, ...prev]);
       } else {
+        // Show actual error message
+        const errorMsg = data.error || 'Failed to start agent';
         setMessages(prev => [{
           id: Date.now(),
           type: 'error',
-          message: `Failed to start agent: ${data.error || 'Unknown error'}`,
+          message: errorMsg,
           timestamp: new Date().toLocaleString(),
         }, ...prev]);
       }
@@ -211,7 +254,7 @@ export default function Home() {
       setMessages(prev => [{
         id: Date.now(),
         type: 'error',
-        message: 'Failed to start agent. Check console for details.',
+        message: 'Network error: Could not connect to backend server.',
         timestamp: new Date().toLocaleString(),
       }, ...prev]);
     }
@@ -238,6 +281,10 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to stop agent:', error);
     }
+  };
+
+  const handleClearMessages = () => {
+    setMessages([]);
   };
 
   const handlePauseAgent = async () => {
@@ -354,9 +401,9 @@ export default function Home() {
     }
   };
 
-  // Show landing page if not logged in
+  // Show marketing landing page if not logged in
   if (!isLoggedIn) {
-    return <HomeHero onLogin={handleLogin} />;
+    return <MarketingLanding onLogin={handleLogin} />;
   }
 
   // Show markets dashboard if logged in
@@ -481,6 +528,7 @@ export default function Home() {
             trades={trades}
             stats={stats}
             isAgentRunning={isAgentRunning}
+            onClearMessages={handleClearMessages}
           />
         </div>
 
@@ -488,5 +536,13 @@ export default function Home() {
         {isDragging && <div className="fixed inset-0 cursor-col-resize z-50" />}
       </main>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <HomeContent />
+    </Suspense>
   );
 }

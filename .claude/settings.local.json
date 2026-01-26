@@ -8,7 +8,14 @@
       "Bash(ls:*)",
       "Bash(pgrep:*)",
       "Bash(pkill:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(poetry lock:*)",
+      "Bash(kill:*)",
+      "Bash(npm run dev:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npm search:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)"
     ]
   }
 }

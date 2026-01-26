@@ -9,6 +9,7 @@ from src.indicators.local_indicators import LocalIndicatorCalculator
 from src.trading.hyperliquid_api import HyperliquidAPI
 import asyncio
 import logging
+import random
 from collections import deque, OrderedDict
 from datetime import datetime, timezone
 import math  # For Sharpe
@@ -18,6 +19,65 @@ import json
 from aiohttp import web
 from src.utils.formatting import format_number as fmt, format_size as fmt_sz
 from src.utils.prompt_utils import json_default, round_or_none, round_series
+
+
+def generate_debug_trades(assets, asset_prices, positions):
+    """Generate random buy/sell trades for debug mode - no LLM needed.
+
+    This generates rapid random trades to stress test the trading system.
+    Every asset gets a trade action (never hold) with tight TP/SL.
+    """
+    decisions = []
+    for asset in assets:
+        price = asset_prices.get(asset, 0)
+        if price <= 0:
+            continue
+
+        # Check existing position
+        existing_pos = None
+        for pos in positions:
+            if pos.get('coin') == asset:
+                existing_pos = pos
+                break
+
+        existing_size = float(existing_pos.get('szi', 0)) if existing_pos else 0
+
+        # If we have a position, flip it. If not, random direction.
+        if existing_size > 0:
+            # Have long, close it (sell)
+            action = "sell"
+        elif existing_size < 0:
+            # Have short, close it (buy)
+            action = "buy"
+        else:
+            # No position, random direction
+            action = random.choice(["buy", "sell"])
+
+        is_buy = action == "buy"
+
+        # Tight TP/SL for quick closes (0.5% TP, 1% SL)
+        if is_buy:
+            tp_price = round(price * 1.005, 2)  # 0.5% profit
+            sl_price = round(price * 0.99, 2)   # 1% loss
+        else:
+            tp_price = round(price * 0.995, 2)  # 0.5% profit
+            sl_price = round(price * 1.01, 2)   # 1% loss
+
+        decisions.append({
+            "asset": asset,
+            "action": action,
+            "allocation_usd": 12.0,  # Minimum order size
+            "tp_price": tp_price,
+            "sl_price": sl_price,
+            "exit_plan": "Debug trade - auto close on tight TP/SL",
+            "rationale": f"Debug/test trade - random {action} for stress testing"
+        })
+
+    return {
+        "reasoning": "Debug mode - generating random trades for UI stress testing",
+        "summary": f"Debug mode: placing {len(decisions)} random trades on {', '.join(assets)}",
+        "trade_decisions": decisions
+    }
 
 load_dotenv()
 
@@ -31,7 +91,9 @@ def clear_terminal():
 
 def get_interval_seconds(interval_str):
     """Convert interval strings like '5m' or '1h' to seconds."""
-    if interval_str.endswith('m'):
+    if interval_str.endswith('s'):
+        return int(interval_str[:-1])
+    elif interval_str.endswith('m'):
         return int(interval_str[:-1]) * 60
     elif interval_str.endswith('h'):
         return int(interval_str[:-1]) * 3600
@@ -86,9 +148,14 @@ def main():
     # Track assets we just traded to avoid immediate reconciliation
     just_traded_assets = set()
 
+    # Override interval for debug mode - use 30 seconds for rapid testing
+    if args.risk_profile == "debug":
+        args.interval = "30s"  # Force 30 second interval in debug mode
+        print(f"⚠️ DEBUG MODE: Forcing 30-second interval for rapid trade testing")
+
     print(f"Starting trading agent for assets: {args.assets} at interval: {args.interval}")
     profile_desc = {
-        'debug': '⚠️ DEBUG MODE - Random frequent trades for testing',
+        'debug': '⚠️ DEBUG MODE - Random frequent trades for testing (30s interval)',
         'high': 'AGGRESSIVE TRADING MODE',
         'moderate': 'Balanced trading',
         'conservative': 'Conservative trading'
@@ -338,35 +405,40 @@ def main():
                 except Exception:
                     return True
 
-            try:
-                outputs = agent.decide_trade(args.assets, context)
-                if not isinstance(outputs, dict):
-                    add_event(f"Invalid output format (expected dict): {outputs}")
-                    outputs = {}
-            except Exception as e:
-                import traceback
-                add_event(f"Agent error: {e}")
-                add_event(f"Traceback: {traceback.format_exc()}")
-                outputs = {}
-
-            # Retry once on failure/parse error with a stricter instruction prefix
-            if _is_failed_outputs(outputs):
-                add_event("Retrying LLM once due to invalid/parse-error output")
-                context_retry_payload = OrderedDict([
-                    ("retry_instruction", "Return ONLY the JSON array per schema with no prose."),
-                    ("original_context", context_payload)
-                ])
-                context_retry = json.dumps(context_retry_payload, default=json_default)
+            # In debug mode, skip LLM and generate random trades for speed
+            if args.risk_profile == "debug":
+                add_event("DEBUG MODE: Generating random trades (skipping LLM)")
+                outputs = generate_debug_trades(args.assets, asset_prices, state['positions'])
+            else:
                 try:
-                    outputs = agent.decide_trade(args.assets, context_retry)
+                    outputs = agent.decide_trade(args.assets, context)
                     if not isinstance(outputs, dict):
-                        add_event(f"Retry invalid format: {outputs}")
+                        add_event(f"Invalid output format (expected dict): {outputs}")
                         outputs = {}
                 except Exception as e:
                     import traceback
-                    add_event(f"Retry agent error: {e}")
-                    add_event(f"Retry traceback: {traceback.format_exc()}")
+                    add_event(f"Agent error: {e}")
+                    add_event(f"Traceback: {traceback.format_exc()}")
                     outputs = {}
+
+                # Retry once on failure/parse error with a stricter instruction prefix
+                if _is_failed_outputs(outputs):
+                    add_event("Retrying LLM once due to invalid/parse-error output")
+                    context_retry_payload = OrderedDict([
+                        ("retry_instruction", "Return ONLY the JSON array per schema with no prose."),
+                        ("original_context", context_payload)
+                    ])
+                    context_retry = json.dumps(context_retry_payload, default=json_default)
+                    try:
+                        outputs = agent.decide_trade(args.assets, context_retry)
+                        if not isinstance(outputs, dict):
+                            add_event(f"Retry invalid format: {outputs}")
+                            outputs = {}
+                    except Exception as e:
+                        import traceback
+                        add_event(f"Retry agent error: {e}")
+                        add_event(f"Retry traceback: {traceback.format_exc()}")
+                        outputs = {}
 
             summary_text = outputs.get("summary", "") if isinstance(outputs, dict) else ""
             if summary_text:
@@ -519,7 +591,78 @@ def main():
                     import traceback
                     add_event(f"Execution error {asset}: {e}")
 
-            await asyncio.sleep(get_interval_seconds(args.interval))
+            # In debug mode, also run rapid mini-trades within the interval
+            if args.risk_profile == "debug":
+                add_event("DEBUG: Waiting 30s with mini-trade bursts every 10s")
+                for burst in range(3):  # 3 bursts within the 30s interval
+                    await asyncio.sleep(10)
+                    # Quick state refresh
+                    try:
+                        burst_state = await hyperliquid.get_user_state()
+                        burst_prices = {}
+                        for asset in args.assets:
+                            try:
+                                burst_prices[asset] = await hyperliquid.get_current_price(asset)
+                            except:
+                                burst_prices[asset] = asset_prices.get(asset, 0)
+
+                        burst_outputs = generate_debug_trades(args.assets, burst_prices, burst_state['positions'])
+                        add_event(f"DEBUG BURST {burst+1}/3: Placing {len(burst_outputs.get('trade_decisions', []))} trades")
+
+                        for output in burst_outputs.get("trade_decisions", []):
+                            try:
+                                asset = output.get("asset")
+                                if not asset:
+                                    continue
+                                action = output.get("action")
+                                current_price = burst_prices.get(asset, 0)
+                                if action in ("buy", "sell") and current_price > 0:
+                                    is_buy = action == "buy"
+                                    alloc_usd = float(output.get("allocation_usd", 12.0))
+                                    if alloc_usd < 12:
+                                        alloc_usd = 12.0
+
+                                    # Check existing position
+                                    existing_position = None
+                                    for pos in burst_state['positions']:
+                                        if pos.get('coin') == asset:
+                                            existing_position = pos
+                                            break
+
+                                    if existing_position:
+                                        existing_size = float(existing_position.get('szi', 0))
+                                        existing_is_long = existing_size > 0
+                                        if (is_buy and not existing_is_long) or (not is_buy and existing_is_long):
+                                            amount = abs(existing_size)
+                                        else:
+                                            amount = alloc_usd / current_price
+                                    else:
+                                        amount = alloc_usd / current_price
+
+                                    just_traded_assets.add(asset)
+                                    order = await hyperliquid.place_buy_order(asset, amount) if is_buy else await hyperliquid.place_sell_order(asset, amount)
+                                    add_event(f"DEBUG BURST: {action.upper()} {asset} @ {current_price}")
+
+                                    # Log to diary
+                                    with open(diary_path, "a") as f:
+                                        diary_entry = {
+                                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                                            "asset": asset,
+                                            "action": action,
+                                            "allocation_usd": alloc_usd,
+                                            "amount": amount,
+                                            "entry_price": current_price,
+                                            "rationale": "Debug burst trade",
+                                            "order_result": str(order),
+                                            "debug_burst": burst + 1
+                                        }
+                                        f.write(json.dumps(diary_entry) + "\n")
+                            except Exception as e:
+                                add_event(f"DEBUG BURST error {asset}: {e}")
+                    except Exception as e:
+                        add_event(f"DEBUG BURST {burst+1} failed: {e}")
+            else:
+                await asyncio.sleep(get_interval_seconds(args.interval))
 
     async def handle_diary(request):
         """Return diary entries as JSON or newline-delimited text."""

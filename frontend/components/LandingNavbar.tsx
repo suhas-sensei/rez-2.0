@@ -3,18 +3,14 @@
 import Image from 'next/image';
 import Link from 'next/link';
 
-interface LandingNavbarProps {
-  onLogin?: () => void;
-}
-
-export default function LandingNavbar({ onLogin }: LandingNavbarProps) {
+export default function LandingNavbar() {
   return (
     <nav className="absolute top-0 left-0 right-0 z-50 bg-white/70 backdrop-blur-sm ">
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 py-3 xl:py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
-            <Image src="/rez.png" alt="Rez Logo" width={40} height={40} />
+            <Image src="/rez1.png" alt="Rez Logo" width={40} height={40} />
             
           </Link>
 

@@ -466,7 +466,7 @@ export default function TransactionsTable({ coin = 'ETH' }: TransactionsTablePro
             {/* Rez Logo */}
             <div className="sticky bottom-2 left-full -ml-14 w-10 h-10 pointer-events-none z-10 float-right">
               <img
-                src="/rez.png"
+                src="/rez1.png"
                 alt="Rez"
                 className="w-10 opacity-60"
               />

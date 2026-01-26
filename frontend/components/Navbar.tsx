@@ -13,7 +13,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between relative">
           {/* Logo */}
           <Link href="/" className="flex items-center">
-            <Image src="/rez.png" alt="Rez Logo" width={32} height={32} />
+            <Image src="/rez1.png" alt="Rez Logo" width={32} height={32} />
           </Link>
 
           {/* Mobile Menu Button */}

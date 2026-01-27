@@ -9,7 +9,7 @@ const Footer = () => {
                 <div className="footer-top">
                     <div className="footer-info">
                         <div className="footer-brand">
-                            <img src="/assets/rez.png" alt="Rez Logo" className="footer-logo" />
+                            <img src="/rez1.png" alt="Rez Logo" className="footer-logo" />
                             <h3>Rez</h3>
                         </div>
                         <p className="footer-description">

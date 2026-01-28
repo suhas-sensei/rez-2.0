@@ -32,7 +32,7 @@ export default function PortfolioHeader({
   isClosingPositions = false,
 }: PortfolioHeaderProps) {
   const isLoading = !accountState;
-  const { symbol: currencySymbol } = useCurrency();
+  const { formatAmount } = useCurrency();
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async () => {
@@ -44,13 +44,6 @@ export default function PortfolioHeader({
     } catch (err) {
       console.error('Failed to copy:', err);
     }
-  };
-
-  const formatCurrency = (value: number) => {
-    return value.toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
   };
 
   const pnlPercent = accountState?.totalReturnPct ?? 0;
@@ -129,7 +122,7 @@ export default function PortfolioHeader({
               <div className="h-6 w-16 bg-gray-200 animate-pulse rounded mx-auto" />
             ) : (
               <p className="text-base xl:text-lg font-semibold text-gray-900">
-                {currencySymbol}{formatCurrency(accountState?.balance ?? 0)}
+                {formatAmount(accountState?.balance ?? 0)}
               </p>
             )}
           </div>
@@ -144,7 +137,7 @@ export default function PortfolioHeader({
                 <span className={`text-base xl:text-lg font-semibold ${
                   (accountState?.unrealizedPnl ?? 0) >= 0 ? 'text-emerald-500' : 'text-red-500'
                 }`}>
-                  {(accountState?.unrealizedPnl ?? 0) >= 0 ? '+' : ''}{currencySymbol}{formatCurrency(accountState?.unrealizedPnl ?? 0)}
+                  {(accountState?.unrealizedPnl ?? 0) >= 0 ? '+' : ''}{formatAmount(accountState?.unrealizedPnl ?? 0)}
                 </span>
                 <span className={`text-[10px] xl:text-xs ${pnlPercent >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                   {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(1)}%
@@ -160,7 +153,7 @@ export default function PortfolioHeader({
               <div className="h-6 w-16 bg-gray-200 animate-pulse rounded mx-auto" />
             ) : (
               <p className="text-base xl:text-lg font-semibold text-gray-900">
-                {currencySymbol}{formatCurrency(accountState?.marginUsed ?? 0)}
+                {formatAmount(accountState?.marginUsed ?? 0)}
               </p>
             )}
           </div>

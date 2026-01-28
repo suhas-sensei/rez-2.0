@@ -16,10 +16,12 @@ import Navbar from '@/components/Navbar';
 import AggregateBar from '@/components/AggregateBar';
 import { useState, useCallback, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useTimezone } from '@/context/TimezoneContext';
 
 function HomeContent() {
   const searchParams = useSearchParams();
   const symbolParam = searchParams.get('symbol');
+  const { formatDateTime } = useTimezone();
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [leftWidth, setLeftWidth] = useState(75);
@@ -255,7 +257,7 @@ function HomeContent() {
           id: Date.now(),
           type: 'info',
           message: `Agent started. Trading ${selectedAssets.join(', ')} on ${selectedInterval} interval.`,
-          timestamp: new Date().toLocaleString(),
+          timestamp: formatDateTime(new Date()),
         }, ...prev]);
       } else {
         // Show actual error message
@@ -264,7 +266,7 @@ function HomeContent() {
           id: Date.now(),
           type: 'error',
           message: errorMsg,
-          timestamp: new Date().toLocaleString(),
+          timestamp: formatDateTime(new Date()),
         }, ...prev]);
       }
     } catch (error) {
@@ -273,7 +275,7 @@ function HomeContent() {
         id: Date.now(),
         type: 'error',
         message: 'Network error: Could not connect to backend server.',
-        timestamp: new Date().toLocaleString(),
+        timestamp: formatDateTime(new Date()),
       }, ...prev]);
     }
   };
@@ -293,7 +295,7 @@ function HomeContent() {
           id: Date.now(),
           type: 'info',
           message: 'Agent stopped by user.',
-          timestamp: new Date().toLocaleString(),
+          timestamp: formatDateTime(new Date()),
         }, ...prev]);
       }
     } catch (error) {
@@ -319,14 +321,14 @@ function HomeContent() {
           id: Date.now(),
           type: 'info',
           message: 'Agent paused. No new trades will be opened.',
-          timestamp: new Date().toLocaleString(),
+          timestamp: formatDateTime(new Date()),
         }, ...prev]);
       } else {
         setMessages(prev => [{
           id: Date.now(),
           type: 'error',
           message: `Failed to pause agent: ${data.error || 'Unknown error'}`,
-          timestamp: new Date().toLocaleString(),
+          timestamp: formatDateTime(new Date()),
         }, ...prev]);
       }
     } catch (error) {
@@ -335,7 +337,7 @@ function HomeContent() {
         id: Date.now(),
         type: 'error',
         message: 'Failed to pause agent. Check console for details.',
-        timestamp: new Date().toLocaleString(),
+        timestamp: formatDateTime(new Date()),
       }, ...prev]);
     }
   };
@@ -354,14 +356,14 @@ function HomeContent() {
           id: Date.now(),
           type: 'info',
           message: 'Agent resumed. Trading is active again.',
-          timestamp: new Date().toLocaleString(),
+          timestamp: formatDateTime(new Date()),
         }, ...prev]);
       } else {
         setMessages(prev => [{
           id: Date.now(),
           type: 'error',
           message: `Failed to resume agent: ${data.error || 'Unknown error'}`,
-          timestamp: new Date().toLocaleString(),
+          timestamp: formatDateTime(new Date()),
         }, ...prev]);
       }
     } catch (error) {
@@ -370,7 +372,7 @@ function HomeContent() {
         id: Date.now(),
         type: 'error',
         message: 'Failed to resume agent. Check console for details.',
-        timestamp: new Date().toLocaleString(),
+        timestamp: formatDateTime(new Date()),
       }, ...prev]);
     }
   };
@@ -396,14 +398,14 @@ function HomeContent() {
           id: Date.now(),
           type: 'info',
           message: `Closed ${data.closed || 0} position(s).`,
-          timestamp: new Date().toLocaleString(),
+          timestamp: formatDateTime(new Date()),
         }, ...prev]);
       } else {
         setMessages(prev => [{
           id: Date.now(),
           type: 'error',
           message: `Failed to close positions: ${data.error || 'Unknown error'}`,
-          timestamp: new Date().toLocaleString(),
+          timestamp: formatDateTime(new Date()),
         }, ...prev]);
       }
     } catch (error) {
@@ -412,7 +414,7 @@ function HomeContent() {
         id: Date.now(),
         type: 'error',
         message: 'Network error while closing positions.',
-        timestamp: new Date().toLocaleString(),
+        timestamp: formatDateTime(new Date()),
       }, ...prev]);
     } finally {
       setIsClosingPositions(false);

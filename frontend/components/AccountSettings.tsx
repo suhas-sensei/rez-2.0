@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useCurrency, Currency } from '@/context/CurrencyContext';
+import { useTimezone, Timezone } from '@/context/TimezoneContext';
 
 interface AccountSettingsProps {
   walletAddress?: string;
@@ -43,18 +44,30 @@ export default function AccountSettings({
 }: AccountSettingsProps) {
   const displayAddress = walletAddress || 'Not connected';
   const { currency, setCurrency } = useCurrency();
+  const { timezone, setTimezone } = useTimezone();
 
   const [settings, setSettings] = useState<SettingsState>({
     displayCurrency: currency,
-    timezone: 'UTC+00:00',
+    timezone: timezone,
     tradeExecutionNotifications: true,
     marketVolatilityAlerts: false,
   });
 
-  // Sync settings with global currency on mount
+  const [initialSettings, setInitialSettings] = useState<SettingsState>({
+    displayCurrency: currency,
+    timezone: timezone,
+    tradeExecutionNotifications: true,
+    marketVolatilityAlerts: false,
+  });
+
+  // Sync settings with global currency and timezone on mount
   useEffect(() => {
-    setSettings(prev => ({ ...prev, displayCurrency: currency }));
-  }, [currency]);
+    setSettings(prev => ({ ...prev, displayCurrency: currency, timezone: timezone }));
+    setInitialSettings(prev => ({ ...prev, displayCurrency: currency, timezone: timezone }));
+  }, [currency, timezone]);
+
+  // Check if settings have changed
+  const hasChanges = JSON.stringify(settings) !== JSON.stringify(initialSettings);
 
   const [copied, setCopied] = useState(false);
 
@@ -71,16 +84,13 @@ export default function AccountSettings({
 
   const handleSave = () => {
     setCurrency(settings.displayCurrency as Currency);
+    setTimezone(settings.timezone as Timezone);
+    setInitialSettings(settings);
     onSave?.(settings);
   };
 
   const handleDiscard = () => {
-    setSettings({
-      displayCurrency: 'USD',
-      timezone: 'UTC+00:00',
-      tradeExecutionNotifications: true,
-      marketVolatilityAlerts: false,
-    });
+    setSettings(initialSettings);
     onDiscard?.();
   };
 
@@ -237,13 +247,23 @@ export default function AccountSettings({
       <div className="shrink-0 border-t border-gray-200 bg-white px-4 xl:px-6 py-3 xl:py-4 flex items-center justify-end gap-3 font-inter">
         <button
           onClick={handleDiscard}
-          className="px-4 py-2 text-xs xl:text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+          disabled={!hasChanges}
+          className={`px-4 py-2 text-xs xl:text-sm font-medium rounded-lg transition-colors ${
+            hasChanges
+              ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              : 'text-gray-300 cursor-not-allowed'
+          }`}
         >
           Discard Changes
         </button>
         <button
           onClick={handleSave}
-          className="px-4 py-2 text-xs xl:text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+          disabled={!hasChanges}
+          className={`px-4 py-2 text-xs xl:text-sm font-medium rounded-lg transition-colors ${
+            hasChanges
+              ? 'text-white bg-blue-600 hover:bg-blue-700'
+              : 'text-gray-400 bg-gray-200 cursor-not-allowed'
+          }`}
         >
           Save Settings
         </button>

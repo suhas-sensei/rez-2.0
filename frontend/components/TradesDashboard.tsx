@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useCurrency } from '@/context/CurrencyContext';
+import { useTimezone } from '@/context/TimezoneContext';
 
 const TABS = ['AGENT CHAT', 'POSITIONS', 'COMPLETED TRADES'];
 
@@ -56,48 +57,53 @@ interface TradesDashboardProps {
   onClearMessages?: () => void;
 }
 
-// Default placeholder data
-const DEFAULT_MESSAGES: AgentMessage[] = [
-  { id: 1, type: 'info', message: 'Agent initialized. Waiting for market data...', timestamp: new Date().toLocaleString() },
-];
-
 export default function TradesDashboard({
   trades = [],
   positions = [],
-  messages = DEFAULT_MESSAGES,
+  messages,
   isAgentRunning = false,
   onClearMessages,
 }: TradesDashboardProps) {
+  const { formatAmount } = useCurrency();
+  const { formatDateTime } = useTimezone();
+
+  // Default placeholder data with timezone-aware formatting
+  const defaultMessages: AgentMessage[] = [
+    { id: 1, type: 'info', message: 'Agent initialized. Waiting for market data...', timestamp: formatDateTime(new Date()) },
+  ];
+
+  // Use provided messages or default
+  const resolvedMessages = messages ?? defaultMessages;
+
   const [activeTab, setActiveTab] = useState('MODELCHAT');
   const [isClosingPositions, setIsClosingPositions] = useState(false);
   const [closingPositionId, setClosingPositionId] = useState<string | number | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [showClearButton, setShowClearButton] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
-  const [displayedMessages, setDisplayedMessages] = useState(messages);
+  const [displayedMessages, setDisplayedMessages] = useState(resolvedMessages);
   const [newMessageIds, setNewMessageIds] = useState<Set<string | number>>(new Set());
-  const { symbol: currencySymbol} = useCurrency();
 
   // Update displayed messages when messages prop changes (but not when clearing)
   useEffect(() => {
     if (!isClearing) {
       // Track which messages are new
       const currentIds = new Set(displayedMessages.map(m => m.id));
-      const incoming = messages.filter(m => !currentIds.has(m.id));
+      const incoming = resolvedMessages.filter(m => !currentIds.has(m.id));
       const incomingIds = new Set(incoming.map(m => m.id));
 
       setNewMessageIds(incomingIds);
-      setDisplayedMessages(messages);
+      setDisplayedMessages(resolvedMessages);
 
       // Clear new message IDs after animation completes
       if (incomingIds.size > 0) {
         setTimeout(() => setNewMessageIds(new Set()), 600);
       }
     }
-  }, [messages, isClearing, displayedMessages]);
+  }, [resolvedMessages, isClearing, displayedMessages]);
 
   const handleClearMessagesWithAnimation = () => {
-    if (!onClearMessages || messages.length === 0) return;
+    if (!onClearMessages || resolvedMessages.length === 0) return;
 
     setIsClearing(true);
     // Wait for animation to complete before clearing
@@ -214,7 +220,7 @@ export default function TradesDashboard({
               onMouseLeave={() => setShowClearButton(false)}
               onClick={handleClearMessagesWithAnimation}
             >
-              {showClearButton && messages.length > 0 ? 'Clear Messages' : `${messages.length} Messages`}
+              {showClearButton && resolvedMessages.length > 0 ? 'Clear Messages' : `${resolvedMessages.length} Messages`}
             </span>
           ) : (
             <span className="text-xs xl:text-sm 2xl:text-base text-gray-500">
@@ -316,16 +322,16 @@ export default function TradesDashboard({
                     </button>
                   </div>
                   <div className="ml-0 sm:ml-6 space-y-1 text-[10px] sm:text-xs xl:text-sm text-gray-600">
-                    <p>Entry: {currencySymbol}{pos.entryPrice.toLocaleString()} | Current: {currencySymbol}{pos.currentPrice.toLocaleString()}</p>
+                    <p>Entry: {formatAmount(pos.entryPrice)} | Current: {formatAmount(pos.currentPrice)}</p>
                     <p>Size: {pos.quantity} {pos.asset}</p>
                     {pos.liquidationPrice && (
-                      <p className="text-red-500">Liq. Price: {currencySymbol}{pos.liquidationPrice.toLocaleString()}</p>
+                      <p className="text-red-500">Liq. Price: {formatAmount(pos.liquidationPrice)}</p>
                     )}
                   </div>
                   <div className="ml-0 sm:ml-6 mt-2">
                     <span className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700">Unrealized P&L: </span>
                     <span className={`text-[10px] sm:text-xs xl:text-sm font-bold ${pos.unrealizedPnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      {pos.unrealizedPnl >= 0 ? '+' : ''}{currencySymbol}{pos.unrealizedPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {pos.unrealizedPnl >= 0 ? '+' : ''}{formatAmount(pos.unrealizedPnl)}
                     </span>
                   </div>
                 </div>
@@ -354,14 +360,14 @@ export default function TradesDashboard({
                     <span className="text-[10px] sm:text-xs text-gray-400">{trade.date}</span>
                   </div>
                   <div className="ml-0 sm:ml-6 space-y-1 text-[10px] sm:text-xs xl:text-sm text-gray-600">
-                    <p>Price: {currencySymbol}{trade.priceFrom.toLocaleString()} → {currencySymbol}{trade.priceTo.toLocaleString()}</p>
-                    <p>Qty: {trade.quantity} | Notional: {currencySymbol}{trade.notionalFrom.toLocaleString()} → {currencySymbol}{trade.notionalTo.toLocaleString()}</p>
+                    <p>Price: {formatAmount(trade.priceFrom)} → {formatAmount(trade.priceTo)}</p>
+                    <p>Qty: {trade.quantity} | Notional: {formatAmount(trade.notionalFrom)} → {formatAmount(trade.notionalTo)}</p>
                     <p>Holding time: {trade.holdingTime}</p>
                   </div>
                   <div className="ml-0 sm:ml-6 mt-2">
                     <span className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700">NET P&L: </span>
                     <span className={`text-[10px] sm:text-xs xl:text-sm font-bold ${trade.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      {trade.pnl >= 0 ? '+' : ''}{currencySymbol}{trade.pnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {trade.pnl >= 0 ? '+' : ''}{formatAmount(trade.pnl)}
                     </span>
                   </div>
                 </div>

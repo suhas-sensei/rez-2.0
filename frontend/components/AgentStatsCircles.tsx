@@ -73,15 +73,17 @@ function formatLargeNumber(num: number): string {
   return num.toLocaleString();
 }
 
-function formatCurrency(num: number): string {
-  if (num >= 1e9) return `$${(num / 1e9).toFixed(2)}B`;
-  if (num >= 1e6) return `$${(num / 1e6).toFixed(2)}M`;
-  if (num >= 1e3) return `$${(num / 1e3).toFixed(1)}K`;
-  return `$${num.toFixed(2)}`;
-}
-
 export default function AgentStatsCircles({ stats, trades = [] }: AgentStatsCirclesProps) {
-  const { symbol: currencySymbol } = useCurrency();
+  const { symbol: currencySymbol, convertAmount } = useCurrency();
+
+  // Format currency with conversion
+  const formatCurrency = (num: number): string => {
+    const converted = convertAmount(num);
+    if (converted >= 1e9) return `${currencySymbol}${(converted / 1e9).toFixed(2)}B`;
+    if (converted >= 1e6) return `${currencySymbol}${(converted / 1e6).toFixed(2)}M`;
+    if (converted >= 1e3) return `${currencySymbol}${(converted / 1e3).toFixed(1)}K`;
+    return `${currencySymbol}${converted.toFixed(2)}`;
+  };
 
   // Calculate stats from trades and positions
   const totalTransactions = stats?.totalTrades ?? trades.length;
@@ -196,7 +198,7 @@ export default function AgentStatsCircles({ stats, trades = [] }: AgentStatsCirc
             <div className="flex flex-col">
               <div className="text-gray-500 text-sm font-medium mb-1">Total P&L</div>
               <div className={`text-[2.75rem] font-bold ${totalPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {totalPnl >= 0 ? '+' : ''}{currencySymbol}{formatLargeNumber(Math.abs(totalPnl))}
+                {totalPnl >= 0 ? '+' : ''}{currencySymbol}{formatLargeNumber(convertAmount(Math.abs(totalPnl)))}
               </div>
             </div>
           </div>

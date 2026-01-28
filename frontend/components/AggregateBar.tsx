@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useCurrency } from '@/context/CurrencyContext';
 
 const SYMBOLS = ['BTC', 'SOL', 'ETH', 'AVAX', 'DOGE', 'STRK'];
 
@@ -12,7 +13,7 @@ interface TickerData {
   changed: boolean;
 }
 
-function AnimatedPrice({ price, up, changed }: { price: number; up: boolean; changed: boolean }) {
+function AnimatedPrice({ price, up, changed, formatAmount }: { price: number; up: boolean; changed: boolean; formatAmount: (n: number) => string }) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [displayPrice, setDisplayPrice] = useState(price);
   const prevPriceRef = useRef(price);
@@ -31,24 +32,19 @@ function AnimatedPrice({ price, up, changed }: { price: number; up: boolean; cha
     }
   }, [price, changed]);
 
-  const formattedPrice = displayPrice.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
   return (
     <span className="text-xs font-medium text-black relative overflow-hidden inline-flex h-4">
       <span
         key={price}
         className={`${isAnimating ? (up ? 'animate-slide-up' : 'animate-slide-down') : ''}`}
       >
-        ${formattedPrice}
+        {formatAmount(displayPrice)}
       </span>
     </span>
   );
 }
 
-function TickerItem({ ticker }: { ticker: TickerData }) {
+function TickerItem({ ticker, formatAmount }: { ticker: TickerData; formatAmount: (n: number) => string }) {
   return (
     <div className="flex items-center gap-1 shrink-0 px-4">
       <span
@@ -59,12 +55,13 @@ function TickerItem({ ticker }: { ticker: TickerData }) {
         {ticker.up ? '↑' : '↓'}
       </span>
       <span className="text-xs text-gray-500">{ticker.symbol}</span>
-      <AnimatedPrice price={ticker.price} up={ticker.up} changed={ticker.changed} />
+      <AnimatedPrice price={ticker.price} up={ticker.up} changed={ticker.changed} formatAmount={formatAmount} />
     </div>
   );
 }
 
 export default function AggregateBar() {
+  const { formatAmount } = useCurrency();
   const [tickers, setTickers] = useState<TickerData[]>(
     SYMBOLS.map((symbol) => ({ symbol, price: 0, prevPrice: 0, up: true, changed: false }))
   );
@@ -118,14 +115,14 @@ export default function AggregateBar() {
           }}
         >
           {displayTickers.map((ticker, index) => (
-            <TickerItem key={`${ticker.symbol}-${index}`} ticker={ticker} />
+            <TickerItem key={`${ticker.symbol}-${index}`} ticker={ticker} formatAmount={formatAmount} />
           ))}
         </div>
 
         {/* Desktop: Static layout (620px and above) */}
         <div className="hidden sm:flex items-center justify-end gap-1 sm:gap-2 xl:gap-3 px-4 sm:px-6 lg:px-8 xl:px-12">
           {tickers.map((ticker) => (
-            <TickerItem key={ticker.symbol} ticker={ticker} />
+            <TickerItem key={ticker.symbol} ticker={ticker} formatAmount={formatAmount} />
           ))}
         </div>
       </div>

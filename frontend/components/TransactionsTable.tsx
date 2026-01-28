@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useCurrency } from '@/context/CurrencyContext';
 
 const TABS = ['TOKEN INFO', 'TRANSACTIONS'];
 
@@ -248,9 +249,19 @@ interface TransactionsTableProps {
 }
 
 export default function TransactionsTable({ coin = 'ETH' }: TransactionsTableProps) {
+  const { symbol: currencySymbol, convertAmount } = useCurrency();
   const [activeTab, setActiveTab] = useState('TOKEN INFO');
   const [tokenInfo, setTokenInfo] = useState<TokenInfo>(DEFAULT_TOKEN_INFO);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Currency-aware format function
+  const formatCurrencyConverted = (n: number): string => {
+    const converted = convertAmount(n);
+    if (converted >= 1e9) return `${currencySymbol}${(converted / 1e9).toFixed(2)}B`;
+    if (converted >= 1e6) return `${currencySymbol}${(converted / 1e6).toFixed(2)}M`;
+    if (converted >= 1e3) return `${currencySymbol}${(converted / 1e3).toFixed(1)}K`;
+    return `${currencySymbol}${converted.toFixed(2)}`;
+  };
 
   useEffect(() => {
     async function fetchHyperliquidData() {
@@ -495,14 +506,14 @@ export default function TransactionsTable({ coin = 'ETH' }: TransactionsTablePro
                       <div className="w-20 xl:w-24">
                         <div className="text-green-500 text-xs xl:text-sm font-medium">{stat.leftLabel}</div>
                         <div className="text-green-600 text-base xl:text-xl font-bold">
-                          {stat.formatType === 'funding' ? formatCurrency(stat.leftValue) : formatValue(stat.leftValue, stat.formatType, false)}
+                          {stat.formatType === 'currency' ? formatCurrencyConverted(stat.leftValue) : formatValue(stat.leftValue, stat.formatType, false)}
                         </div>
                       </div>
                       {stat.rightLabel && (
                         <div className="w-20 xl:w-24">
                           <div className="text-red-500 text-xs xl:text-sm font-medium">{stat.rightLabel}</div>
                           <div className={`text-base xl:text-xl font-bold ${stat.rightLabel === 'FUNDING' ? (stat.rightValue >= 0 ? 'text-green-600' : 'text-red-600') : 'text-red-600'}`}>
-                            {formatValue(stat.rightValue, stat.formatType, true)}
+                            {stat.formatType === 'currency' ? formatCurrencyConverted(stat.rightValue) : formatValue(stat.rightValue, stat.formatType, true)}
                           </div>
                         </div>
                       )}
@@ -536,7 +547,7 @@ export default function TransactionsTable({ coin = 'ETH' }: TransactionsTablePro
                     <div className="flex flex-col">
                       <div className="text-gray-500 text-xs xl:text-sm font-medium mb-0.5 xl:mb-1">Liquidity</div>
                       <div className="text-xl xl:text-[2.75rem] font-bold text-gray-900">
-                        {isLoading ? '...' : `$${formatLargeNumber(tokenInfo.liquidity)}`}
+                        {isLoading ? '...' : formatCurrencyConverted(tokenInfo.liquidity)}
                       </div>
                     </div>
 
@@ -544,7 +555,7 @@ export default function TransactionsTable({ coin = 'ETH' }: TransactionsTablePro
                     <div className="flex flex-col">
                       <div className="text-gray-500 text-xs xl:text-sm font-medium mb-0.5 xl:mb-1">Volume</div>
                       <div className="text-xl xl:text-[2.75rem] font-bold text-gray-900">
-                        {isLoading ? '...' : `$${formatLargeNumber(tokenInfo.volume)}`}
+                        {isLoading ? '...' : formatCurrencyConverted(tokenInfo.volume)}
                       </div>
                     </div>
                   </div>
@@ -622,7 +633,7 @@ export default function TransactionsTable({ coin = 'ETH' }: TransactionsTablePro
                   {tx.usdc.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </td>
                 <td className="py-2 px-3 text-right text-green-500">
-                  ${tx.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  {formatCurrencyConverted(tx.price)}
                 </td>
                 <td className="py-2 px-3 text-right">
                   <span className="flex items-center justify-end gap-1">

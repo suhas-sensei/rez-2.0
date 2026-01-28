@@ -4,6 +4,7 @@ import TradesDashboard from '@/components/TradesDashboard';
 import type { Position, AgentMessage, Trade, AgentStats } from '@/components/TradesDashboard';
 import LiveChart from '@/components/LiveChart';
 import BalanceChart from '@/components/BalanceChart';
+import AgentStatsCircles from '@/components/AgentStatsCircles';
 import PortfolioSidebar from '@/components/PortfolioSidebar';
 import PortfolioHeader from '@/components/PortfolioHeader';
 import RiskProfileSelector from '@/components/RiskProfileSelector';
@@ -90,6 +91,13 @@ function HomeContent() {
     localStorage.setItem('isLoggedIn', 'true');
   };
 
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    localStorage.removeItem('isLoggedIn');
+    setWalletAddress('');
+    setAccountState(null);
+  };
+
   const handleMouseDown = () => {
     setIsDragging(true);
   };
@@ -142,21 +150,31 @@ function HomeContent() {
     checkAgentStatus();
   }, []);
 
-  // Fetch wallet address on mount
+  // Fetch wallet address and initial account state when logged in
   useEffect(() => {
-    const fetchWalletAddress = async () => {
+    if (!isLoggedIn) return;
+
+    const fetchWalletData = async () => {
       try {
         const response = await fetch('/api/wallet');
         const data = await response.json();
         if (data.address) {
           setWalletAddress(data.address);
         }
+        if (data.accountState) {
+          setAccountState({
+            balance: data.accountState.balance ?? 0,
+            unrealizedPnl: data.accountState.unrealizedPnl ?? 0,
+            marginUsed: data.accountState.marginUsed ?? 0,
+            totalReturnPct: 0,
+          });
+        }
       } catch (error) {
-        console.error('Failed to fetch wallet address:', error);
+        console.error('Failed to fetch wallet data:', error);
       }
     };
-    fetchWalletAddress();
-  }, []);
+    fetchWalletData();
+  }, [isLoggedIn]);
 
   // Poll logs when agent is running
   useEffect(() => {
@@ -432,8 +450,10 @@ function HomeContent() {
                 <div className="flex-1 overflow-auto">
                   <PortfolioHeader
                     accountState={accountState}
+                    walletAddress={walletAddress}
                     onAccountSettings={() => setPortfolioTab('settings')}
                     onViewGrowth={() => setPortfolioTab('growth')}
+                    onLogout={handleLogout}
                     onCloseAllPositions={handleCloseAllPositions}
                     positionsCount={positions.length}
                     isClosingPositions={isClosingPositions}
@@ -464,7 +484,7 @@ function HomeContent() {
               )}
 
               {portfolioTab === 'growth' && (
-                <div className="flex-1 min-h-0 flex flex-col">
+                <div className="flex-1 min-h-0 flex flex-col overflow-auto">
                   {/* Back to Config button */}
                   <div className="px-4 py-3 border-b border-gray-200 bg-white shrink-0">
                     <button
@@ -474,12 +494,17 @@ function HomeContent() {
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                       </svg>
-                      Back to Portfolio
+               
                     </button>
                   </div>
-                  <div className="flex-1 min-h-0">
+                  <div className="flex-1 min-h-0" style={{ minHeight: '300px' }}>
                     <BalanceChart currentBalance={accountState?.balance ?? null} />
                   </div>
+                  {/* Agent Stats with Circle Graphs */}
+                  <AgentStatsCircles
+                    stats={stats}
+                    trades={trades}
+                  />
                 </div>
               )}
 
@@ -526,7 +551,6 @@ function HomeContent() {
             positions={positions}
             messages={messages}
             trades={trades}
-            stats={stats}
             isAgentRunning={isAgentRunning}
             onClearMessages={handleClearMessages}
           />

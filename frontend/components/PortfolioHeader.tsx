@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useCurrency } from '@/context/CurrencyContext';
 
 interface AccountState {
@@ -11,8 +12,10 @@ interface AccountState {
 
 interface PortfolioHeaderProps {
   accountState: AccountState | null;
+  walletAddress?: string;
   onAccountSettings?: () => void;
   onViewGrowth?: () => void;
+  onLogout?: () => void;
   onCloseAllPositions?: () => void;
   positionsCount?: number;
   isClosingPositions?: boolean;
@@ -20,14 +23,28 @@ interface PortfolioHeaderProps {
 
 export default function PortfolioHeader({
   accountState,
+  walletAddress,
   onAccountSettings,
   onViewGrowth,
+  onLogout,
   onCloseAllPositions,
   positionsCount = 0,
   isClosingPositions = false,
 }: PortfolioHeaderProps) {
   const isLoading = !accountState;
   const { symbol: currencySymbol } = useCurrency();
+  const [copied, setCopied] = useState(false);
+
+  const copyToClipboard = async () => {
+    if (!walletAddress) return;
+    try {
+      await navigator.clipboard.writeText(walletAddress);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
 
   const formatCurrency = (value: number) => {
     return value.toLocaleString('en-US', {
@@ -44,11 +61,40 @@ export default function PortfolioHeader({
         {/* Left side - Title */}
         <div>
           <h2 className="text-lg xl:text-xl font-semibold text-gray-900">Portfolio Overview</h2>
-          
+          {walletAddress && (
+            <button
+              onClick={copyToClipboard}
+              className="flex items-center gap-2 mt-1 cursor-pointer hover:bg-gray-100 rounded px-1 -ml-1 transition-colors"
+              title={copied ? 'Copied!' : 'Click to copy address'}
+            >
+              <span className="text-xs xl:text-sm text-gray-500 font-mono">
+                {walletAddress.slice(0, 4)}..{walletAddress.slice(-5)}
+              </span>
+              {copied ? (
+                <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Right side - Stats in a box */}
         <div className="flex items-center gap-3">
+          {/* Logout Button */}
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="flex items-center justify-center px-5 py-3 xl:py-4 bg-red-500/80 hover:bg-red-600/90 rounded-2xl shadow-sm transition-colors"
+            >
+              <span className="text-sm xl:text-base font-medium text-white">Logout</span>
+            </button>
+          )}
+
           {/* Account Settings Tab */}
           {onAccountSettings && (
             <button

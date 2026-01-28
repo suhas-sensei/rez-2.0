@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useCurrency } from '@/context/CurrencyContext';
 
-const TABS = ['MODELCHAT', 'POSITIONS', 'COMPLETED TRADES', 'AGENT STATS'];
+const TABS = ['AGENT CHAT', 'POSITIONS', 'COMPLETED TRADES'];
 
 export interface Trade {
   id: number | string;
@@ -52,7 +52,6 @@ interface TradesDashboardProps {
   trades?: Trade[];
   positions?: Position[];
   messages?: AgentMessage[];
-  stats?: AgentStats;
   isAgentRunning?: boolean;
   onClearMessages?: () => void;
 }
@@ -66,7 +65,6 @@ export default function TradesDashboard({
   trades = [],
   positions = [],
   messages = DEFAULT_MESSAGES,
-  stats,
   isAgentRunning = false,
   onClearMessages,
 }: TradesDashboardProps) {
@@ -222,7 +220,6 @@ export default function TradesDashboard({
             <span className="text-xs xl:text-sm 2xl:text-base text-gray-500">
               {activeTab === 'COMPLETED TRADES' && `${trades.length} Trades`}
               {activeTab === 'POSITIONS' && `${positions.length} Open Positions`}
-              {activeTab === 'AGENT STATS' && 'Performance Metrics'}
             </span>
           )}
         </div>
@@ -373,50 +370,6 @@ export default function TradesDashboard({
           </div>
         )}
 
-        {/* AGENT STATS */}
-        {activeTab === 'AGENT STATS' && (
-          <div>
-            {!stats ? (
-              <div className="text-center py-10 text-gray-400">
-                <p className="text-sm">No stats available</p>
-                <p className="text-xs mt-1">Statistics will appear after the agent completes trades</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3 xl:gap-4">
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-4 xl:p-5 border border-gray-200/60">
-                  <p className="text-[10px] xl:text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Total Trades</p>
-                  <p className="text-lg xl:text-xl font-bold text-gray-900">{stats.totalTrades}</p>
-                </div>
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-4 xl:p-5 border border-gray-200/60">
-                  <p className="text-[10px] xl:text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Win Rate</p>
-                  <p className="text-lg xl:text-xl font-bold text-gray-900">{stats.winRate.toFixed(1)}%</p>
-                </div>
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-4 xl:p-5 border border-gray-200/60">
-                  <p className="text-[10px] xl:text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Total P&L</p>
-                  <p className={`text-lg xl:text-xl font-bold ${stats.totalPnl >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    {stats.totalPnl >= 0 ? '+' : ''}{currencySymbol}{stats.totalPnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-4 xl:p-5 border border-gray-200/60">
-                  <p className="text-[10px] xl:text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Avg Hold Time</p>
-                  <p className="text-lg xl:text-xl font-bold text-gray-900">{stats.avgHoldTime || '-'}</p>
-                </div>
-                {stats.sharpeRatio !== undefined && (
-                  <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-4 xl:p-5 border border-gray-200/60">
-                    <p className="text-[10px] xl:text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Sharpe Ratio</p>
-                    <p className="text-lg xl:text-xl font-bold text-gray-900">{stats.sharpeRatio.toFixed(2)}</p>
-                  </div>
-                )}
-                {stats.maxDrawdown !== undefined && (
-                  <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-xl p-4 xl:p-5 border border-gray-200/60">
-                    <p className="text-[10px] xl:text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Max Drawdown</p>
-                    <p className="text-lg xl:text-xl font-bold text-red-500">-{stats.maxDrawdown.toFixed(1)}%</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

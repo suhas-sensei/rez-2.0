@@ -16,7 +16,7 @@ interface BalanceDataPoint {
 }
 
 export default function BalanceChart({ currentBalance, className = '' }: BalanceChartProps) {
-  const { symbol: currencySymbol } = useCurrency();
+  const { symbol: currencySymbol, convertAmount, formatAmount } = useCurrency();
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Area'> | null>(null);
@@ -137,7 +137,7 @@ export default function BalanceChart({ currentBalance, className = '' }: Balance
       },
       autoSize: true,
       localization: {
-        priceFormatter: (price: number) => `${currencySymbol}${price.toFixed(2)}`,
+        priceFormatter: (price: number) => `${currencySymbol}${convertAmount(price).toFixed(2)}`,
       },
     });
 
@@ -267,7 +267,7 @@ export default function BalanceChart({ currentBalance, className = '' }: Balance
         {currentBalance !== null && (
           <>
             <span className="text-xl xl:text-2xl 2xl:text-3xl font-bold text-gray-900">
-              {currencySymbol}{currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {formatAmount(currentBalance)}
             </span>
             {balanceHistory.length > 1 && (
               <span className={`text-base xl:text-lg ${pnlPercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>

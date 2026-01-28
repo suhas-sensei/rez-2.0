@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useCurrency } from '@/context/CurrencyContext';
 
 const TABS = ['TOKEN INFO', 'TRANSACTIONS'];
 
@@ -143,9 +144,8 @@ function CircleProgress({ percent, size = 60, strokeWidth = 6 }: { percent: numb
       <svg
         width={size}
         height={size}
-        className={isProfit ? '' : 'scale-x-[-1]'} // Flip horizontally for counter-clockwise
+        className={isProfit ? '' : 'scale-x-[-1]'}
       >
-        {/* Background circle */}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -154,7 +154,6 @@ function CircleProgress({ percent, size = 60, strokeWidth = 6 }: { percent: numb
           stroke="#e5e7eb"
           strokeWidth={strokeWidth}
         />
-        {/* Progress circle */}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -168,7 +167,7 @@ function CircleProgress({ percent, size = 60, strokeWidth = 6 }: { percent: numb
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </svg>
-      <span className={`absolute text-sm font-semibold ${isProfit ? 'text-green-500' : 'text-red-500'}`}>
+      <span className={`absolute text-[10px] xl:text-sm font-semibold ${isProfit ? 'text-green-500' : 'text-red-500'}`}>
         {isProfit ? '+' : ''}{percent}%
       </span>
     </div>
@@ -250,9 +249,19 @@ interface TransactionsTableProps {
 }
 
 export default function TransactionsTable({ coin = 'ETH' }: TransactionsTableProps) {
+  const { symbol: currencySymbol, convertAmount } = useCurrency();
   const [activeTab, setActiveTab] = useState('TOKEN INFO');
   const [tokenInfo, setTokenInfo] = useState<TokenInfo>(DEFAULT_TOKEN_INFO);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Currency-aware format function
+  const formatCurrencyConverted = (n: number): string => {
+    const converted = convertAmount(n);
+    if (converted >= 1e9) return `${currencySymbol}${(converted / 1e9).toFixed(2)}B`;
+    if (converted >= 1e6) return `${currencySymbol}${(converted / 1e6).toFixed(2)}M`;
+    if (converted >= 1e3) return `${currencySymbol}${(converted / 1e3).toFixed(1)}K`;
+    return `${currencySymbol}${converted.toFixed(2)}`;
+  };
 
   useEffect(() => {
     async function fetchHyperliquidData() {
@@ -462,7 +471,7 @@ export default function TransactionsTable({ coin = 'ETH' }: TransactionsTablePro
         } : undefined}
       >
         {activeTab === 'TOKEN INFO' ? (
-          <div className="p-6 relative">
+          <div className="p-3 xl:p-6 relative">
             {/* Rez Logo */}
             <div className="sticky bottom-2 left-full -ml-14 w-10 h-10 pointer-events-none z-10 float-right">
               <img
@@ -471,40 +480,40 @@ export default function TransactionsTable({ coin = 'ETH' }: TransactionsTablePro
                 className="w-10 opacity-60"
               />
             </div>
-            <div className="flex gap-8">
+            <div className="flex gap-4 xl:gap-8">
               {/* Left Section - Stats */}
               <div className="shrink-0">
                 {/* Top Section: Transaction Card */}
-                <div className="mb-6">
-                  <div className="text-gray-500 text-base font-medium mb-2">Transactions</div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-5xl font-bold text-gray-900">
+                <div className="mb-3 xl:mb-6">
+                  <div className="text-gray-500 text-sm xl:text-base font-medium mb-1 xl:mb-2">Transactions</div>
+                  <div className="flex items-center gap-2 xl:gap-4">
+                    <span className="text-2xl xl:text-5xl font-bold text-gray-900">
                       {isLoading ? '...' : formatLargeNumber(tokenInfo.transactions)}
                     </span>
-                    <span className={`px-3 py-1.5 rounded text-base font-semibold ${
+                    <span className={`px-2 py-1 xl:px-3 xl:py-1.5 rounded text-xs xl:text-base font-semibold ${
                       tokenInfo.totalChange >= 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
                     }`}>
                       {tokenInfo.totalChange >= 0 ? '↑' : '↓'} {Math.abs(tokenInfo.totalChange).toFixed(2)}%
                     </span>
                   </div>
-                  <div className="text-gray-400 text-sm mt-2">Compare from last 24hrs</div>
+                  <div className="text-gray-400 text-xs xl:text-sm mt-1 xl:mt-2">Compare from last 24hrs</div>
                 </div>
 
                 {/* Stat Rows */}
-                <div className="flex flex-col gap-6">
+                <div className="flex flex-col gap-3 xl:gap-6">
                   {tokenInfo.stats.map((stat) => (
-                    <div key={stat.label} className="flex gap-4">
-                      <div className="w-24">
-                        <div className="text-green-500 text-sm font-medium">{stat.leftLabel}</div>
-                        <div className="text-green-600 text-xl font-bold">
-                          {stat.formatType === 'funding' ? formatCurrency(stat.leftValue) : formatValue(stat.leftValue, stat.formatType, false)}
+                    <div key={stat.label} className="flex gap-3 xl:gap-4">
+                      <div className="w-20 xl:w-24">
+                        <div className="text-green-500 text-xs xl:text-sm font-medium">{stat.leftLabel}</div>
+                        <div className="text-green-600 text-base xl:text-xl font-bold">
+                          {stat.formatType === 'currency' ? formatCurrencyConverted(stat.leftValue) : formatValue(stat.leftValue, stat.formatType, false)}
                         </div>
                       </div>
                       {stat.rightLabel && (
-                        <div className="w-24">
-                          <div className="text-red-500 text-sm font-medium">{stat.rightLabel}</div>
-                          <div className={`text-xl font-bold ${stat.rightLabel === 'FUNDING' ? (stat.rightValue >= 0 ? 'text-green-600' : 'text-red-600') : 'text-red-600'}`}>
-                            {formatValue(stat.rightValue, stat.formatType, true)}
+                        <div className="w-20 xl:w-24">
+                          <div className="text-red-500 text-xs xl:text-sm font-medium">{stat.rightLabel}</div>
+                          <div className={`text-base xl:text-xl font-bold ${stat.rightLabel === 'FUNDING' ? (stat.rightValue >= 0 ? 'text-green-600' : 'text-red-600') : 'text-red-600'}`}>
+                            {stat.formatType === 'currency' ? formatCurrencyConverted(stat.rightValue) : formatValue(stat.rightValue, stat.formatType, true)}
                           </div>
                         </div>
                       )}
@@ -516,43 +525,48 @@ export default function TransactionsTable({ coin = 'ETH' }: TransactionsTablePro
               {/* Right Section - Circles and Cards */}
               <div className="flex-1 flex flex-col">
                 {/* Circular Progress Indicators */}
-                <div className="flex items-center gap-10 mb-6">
+                <div className="flex items-center gap-4 xl:gap-10 mb-3 xl:mb-6">
                   {tokenInfo.changes.map((change) => (
-                    <div key={change.label} className="flex flex-col items-center gap-2">
-                      <CircleProgress percent={change.value} size={80} strokeWidth={7} />
-                      <span className="text-sm text-gray-500 font-medium">{change.label}</span>
+                    <div key={change.label} className="flex flex-col items-center gap-1 xl:gap-2">
+                      <div className="hidden xl:block">
+                        <CircleProgress percent={change.value} size={80} strokeWidth={7} />
+                      </div>
+                      <div className="block xl:hidden">
+                        <CircleProgress percent={change.value} size={50} strokeWidth={5} />
+                      </div>
+                      <span className="text-xs xl:text-sm text-gray-500 font-medium">{change.label}</span>
                     </div>
                   ))}
                 </div>
 
                 {/* Cards Row */}
-                <div className="flex gap-8">
+                <div className="flex gap-4 xl:gap-8">
                   {/* Liquidity and Volume stacked */}
-                  <div className="flex flex-col gap-6">
+                  <div className="flex flex-col gap-3 xl:gap-6">
                     {/* Liquidity Card */}
                     <div className="flex flex-col">
-                      <div className="text-gray-500 text-sm font-medium mb-1">Liquidity</div>
-                      <div className="text-[2.75rem] font-bold text-gray-900">
-                        {isLoading ? '...' : `$${formatLargeNumber(tokenInfo.liquidity)}`}
+                      <div className="text-gray-500 text-xs xl:text-sm font-medium mb-0.5 xl:mb-1">Liquidity</div>
+                      <div className="text-xl xl:text-[2.75rem] font-bold text-gray-900">
+                        {isLoading ? '...' : formatCurrencyConverted(tokenInfo.liquidity)}
                       </div>
                     </div>
 
                     {/* Volume Card */}
                     <div className="flex flex-col">
-                      <div className="text-gray-500 text-sm font-medium mb-1">Volume</div>
-                      <div className="text-[2.75rem] font-bold text-gray-900">
-                        {isLoading ? '...' : `$${formatLargeNumber(tokenInfo.volume)}`}
+                      <div className="text-gray-500 text-xs xl:text-sm font-medium mb-0.5 xl:mb-1">Volume</div>
+                      <div className="text-xl xl:text-[2.75rem] font-bold text-gray-900">
+                        {isLoading ? '...' : formatCurrencyConverted(tokenInfo.volume)}
                       </div>
                     </div>
                   </div>
 
                   {/* Funding Card */}
                   <div className="flex flex-col">
-                    <div className="text-gray-500 text-sm font-medium mb-1">Funding</div>
-                    <div className={`text-[1.71875rem] font-bold ${tokenInfo.funding >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <div className="text-gray-500 text-xs xl:text-sm font-medium mb-0.5 xl:mb-1">Funding</div>
+                    <div className={`text-lg xl:text-[1.71875rem] font-bold ${tokenInfo.funding >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {tokenInfo.funding.toFixed(4)}%
                     </div>
-                    <div className="text-gray-900 text-[0.9375rem] font-mono mt-1">
+                    <div className="text-gray-900 text-xs xl:text-[0.9375rem] font-mono mt-0.5 xl:mt-1">
                       {tokenInfo.countdown}
                     </div>
                   </div>
@@ -619,7 +633,7 @@ export default function TransactionsTable({ coin = 'ETH' }: TransactionsTablePro
                   {tx.usdc.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </td>
                 <td className="py-2 px-3 text-right text-green-500">
-                  ${tx.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  {formatCurrencyConverted(tx.price)}
                 </td>
                 <td className="py-2 px-3 text-right">
                   <span className="flex items-center justify-end gap-1">

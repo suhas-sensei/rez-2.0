@@ -1,7 +1,7 @@
 'use client';
 
 import TradesDashboard from '@/components/TradesDashboard';
-import type { Position, AgentMessage, Trade, AgentStats } from '@/components/TradesDashboard';
+import type { Position, AgentMessage, Trade } from '@/components/TradesDashboard';
 import PortfolioSidebar from '@/components/PortfolioSidebar';
 import Navbar from '@/components/Navbar';
 import AggregateBar from '@/components/AggregateBar';
@@ -64,7 +64,6 @@ export default function LeaderboardPage() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [stats, setStats] = useState<AgentStats | undefined>(undefined);
   const lastEntryTimestamp = useRef<string | null>(null);
 
   const handleAssetSelect = (symbol: string) => {
@@ -165,9 +164,6 @@ export default function LeaderboardPage() {
         }
         if (data.positions && Array.isArray(data.positions)) {
           setPositions(data.positions);
-        }
-        if (data.stats) {
-          setStats(data.stats);
         }
       } catch (error) {
         console.error('Failed to fetch logs:', error);
@@ -317,7 +313,6 @@ export default function LeaderboardPage() {
             positions={positions}
             messages={messages}
             trades={trades}
-            stats={stats}
             isAgentRunning={isAgentRunning}
             onClearMessages={handleClearMessages}
           />

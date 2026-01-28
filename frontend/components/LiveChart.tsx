@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { createChart, ColorType, LineSeries, CandlestickSeries } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, LineData, CandlestickData, Time } from 'lightweight-charts';
 import TransactionsTable from './TransactionsTable';
+import { useCurrency } from '@/context/CurrencyContext';
 
 const TIME_INTERVALS = [
   { label: '1s', value: '1s' },
@@ -57,6 +58,7 @@ interface LiveChartProps {
 
 export default function LiveChart({ symbol = 'ETHUSDT' }: LiveChartProps) {
   const coin = SYMBOL_TO_COIN[symbol] || 'ETH';
+  const { symbol: currencySymbol, convertAmount } = useCurrency();
   const containerRef = useRef<HTMLDivElement>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -157,18 +159,19 @@ export default function LiveChart({ symbol = 'ETHUSDT' }: LiveChartProps) {
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 400;
 
-    // Price formatter for large numbers (MCap mode)
+    // Price formatter for large numbers (MCap mode) with currency conversion
     const formatPrice = (price: number): string => {
+      const converted = convertAmount(price);
       if (priceMode === 'MCap') {
-        if (price >= 1_000_000_000_000) {
-          return `${(price / 1_000_000_000_000).toFixed(2)}T`;
-        } else if (price >= 1_000_000_000) {
-          return `${(price / 1_000_000_000).toFixed(2)}B`;
-        } else if (price >= 1_000_000) {
-          return `${(price / 1_000_000).toFixed(2)}M`;
+        if (converted >= 1_000_000_000_000) {
+          return `${currencySymbol}${(converted / 1_000_000_000_000).toFixed(2)}T`;
+        } else if (converted >= 1_000_000_000) {
+          return `${currencySymbol}${(converted / 1_000_000_000).toFixed(2)}B`;
+        } else if (converted >= 1_000_000) {
+          return `${currencySymbol}${(converted / 1_000_000).toFixed(2)}M`;
         }
       }
-      return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return `${currencySymbol}${converted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
     const chart = createChart(container, {
@@ -363,7 +366,7 @@ export default function LiveChart({ symbol = 'ETHUSDT' }: LiveChartProps) {
         chartRef.current.remove();
       }
     };
-  }, [symbol, coin, fetchHistoricalData, selectedInterval, chartType, priceMode]);
+  }, [symbol, coin, fetchHistoricalData, selectedInterval, chartType, priceMode, currencySymbol, convertAmount]);
 
   const handleIntervalChange = (interval: string) => {
     setSelectedInterval(interval);
@@ -516,11 +519,11 @@ export default function LiveChart({ symbol = 'ETHUSDT' }: LiveChartProps) {
           <>
             <span className="text-xl xl:text-2xl 2xl:text-3xl font-bold text-gray-900">
               {priceMode === 'MCap' ? (
-                currentPrice >= 1_000_000_000_000
-                  ? `$${(currentPrice / 1_000_000_000_000).toFixed(2)}T`
-                  : `$${(currentPrice / 1_000_000_000).toFixed(2)}B`
+                convertAmount(currentPrice) >= 1_000_000_000_000
+                  ? `${currencySymbol}${(convertAmount(currentPrice) / 1_000_000_000_000).toFixed(2)}T`
+                  : `${currencySymbol}${(convertAmount(currentPrice) / 1_000_000_000).toFixed(2)}B`
               ) : (
-                `$${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                `${currencySymbol}${convertAmount(currentPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               )}
             </span>
             <span className={`text-base xl:text-lg ${priceChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>

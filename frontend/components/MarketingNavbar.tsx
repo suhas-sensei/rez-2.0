@@ -44,7 +44,7 @@ const Navbar = () => {
             <div className="navbar-content">
                 <div className="navbar-left">
                     <div className="navbar-brand" onClick={() => scrollToSection('#hero')}>
-                        <img src="/rez1.png" alt="Rez Logo" className="brand-logo" />
+                        <img src="/rez.png" alt="Rez Logo" className="brand-logo" />
                         <span className="brand-name">Rez</span>
                     </div>
                 </div>

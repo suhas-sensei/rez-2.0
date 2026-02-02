@@ -38,12 +38,12 @@ export async function POST(request: Request) {
 
     console.log(`Starting agent for session: ${session.sessionId}`);
 
-    // Call backend to start agent
+    // Call backend to start agent - use publicKey as session_id for consistency across browsers
     const response = await fetch(`${BACKEND_URL}/start-agent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        session_id: session.sessionId,
+        session_id: session.publicKey,  // Use wallet address as key
         assets,
         interval,
         risk_profile: riskProfile || 'conservative',
@@ -87,12 +87,12 @@ export async function DELETE() {
       return NextResponse.json({ success: true, message: 'No agent running' });
     }
 
-    // Call backend to stop agent
+    // Call backend to stop agent - use publicKey for consistency across browsers
     const response = await fetch(`${BACKEND_URL}/stop-agent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        session_id: session.sessionId,
+        session_id: session.publicKey,  // Use wallet address as key
       }),
     });
 
@@ -127,8 +127,8 @@ export async function GET() {
       });
     }
 
-    // Call backend to get agent status
-    const response = await fetch(`${BACKEND_URL}/agent-status/${session.sessionId}`);
+    // Call backend to get agent status - use publicKey for consistency across browsers
+    const response = await fetch(`${BACKEND_URL}/agent-status/${session.publicKey}`);
 
     if (!response.ok) {
       return NextResponse.json({
@@ -144,6 +144,10 @@ export async function GET() {
       running: result.running,
       paused: result.paused,
       pid: result.session_id,
+      // Include config so UI can restore last used settings
+      assets: result.assets,
+      interval: result.interval,
+      riskProfile: result.risk_profile,
     });
   } catch (error) {
     console.error('Failed to get agent status:', error);

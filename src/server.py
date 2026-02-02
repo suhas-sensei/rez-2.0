@@ -6,7 +6,7 @@ import sys
 import pathlib
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from contextlib import asynccontextmanager
 
 sys.path.append(str(pathlib.Path(__file__).parent.parent))
@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 # Directory for log files
 LOG_DIR = pathlib.Path("/tmp/rez_logs")
 LOG_DIR.mkdir(exist_ok=True)
+
+# File for persisting agent registry
+REGISTRY_FILE = LOG_DIR / "agent_registry.json"
+import json as _json
 
 
 class AgentConfig(BaseModel):
@@ -81,47 +85,107 @@ class AgentInstance:
 agent_registry: Dict[str, AgentInstance] = {}
 
 
+def save_registry():
+    """Save agent registry to disk for persistence."""
+    try:
+        data = {}
+        for session_id, agent in agent_registry.items():
+            data[session_id] = {
+                "assets": agent.config.assets,
+                "interval": agent.config.interval,
+                "risk_profile": agent.config.risk_profile,
+                "private_key": agent.config.private_key,
+                "public_key": agent.config.public_key,
+                "paused": agent.paused,
+                "running": agent.is_running(),
+                "started_at": agent.started_at.isoformat() if agent.started_at else None,
+            }
+        with open(REGISTRY_FILE, 'w') as f:
+            _json.dump(data, f)
+        logger.info(f"Saved registry with {len(data)} agents")
+    except Exception as e:
+        logger.error(f"Failed to save registry: {e}")
+
+
+def load_registry() -> dict:
+    """Load agent registry from disk."""
+    try:
+        if REGISTRY_FILE.exists():
+            with open(REGISTRY_FILE, 'r') as f:
+                data = _json.load(f)
+            logger.info(f"Loaded registry with {len(data)} agents")
+            return data
+    except Exception as e:
+        logger.error(f"Failed to load registry: {e}")
+    return {}
+
+
 def run_agent_process(config: AgentConfig, log_file_path: str):
     """Run the trading agent in a subprocess."""
     import sys
     import pathlib
-    sys.path.append(str(pathlib.Path(__file__).parent.parent))
-
-    # Set environment variables for this agent BEFORE importing config_loader
-    # This ensures the correct wallet is used for this session
-    os.environ['HYPERLIQUID_PRIVATE_KEY'] = config.private_key
-    os.environ['HYPERLIQUID_ACCOUNT_ADDRESS'] = config.public_key
-
-    # Import config_loader and update CONFIG with our wallet
-    from src import config_loader
-    config_loader.CONFIG['hyperliquid_private_key'] = config.private_key
-    config_loader.CONFIG['hyperliquid_account_address'] = config.public_key
-
-    # Now import the rest - they'll use the updated CONFIG
-    from src.agent.decision_maker import TradingAgent
-    from src.indicators.local_indicators import LocalIndicatorCalculator
-    from src.trading.hyperliquid_api import HyperliquidAPI
-    from src.utils.formatting import format_number as fmt
-    from src.utils.prompt_utils import json_default, round_or_none, round_series
+    import traceback
     import json
-    import math
-    from collections import OrderedDict, deque
 
+    # Diary file for trade history (same directory as log file)
+    diary_file_path = log_file_path.replace('.log', '_diary.jsonl')
+
+    # Define log function FIRST so we can catch import errors
     def log(msg: str):
         """Write log message to file."""
         timestamp = datetime.now(timezone.utc).isoformat()
         log_msg = f"[{timestamp}] {msg}"
         try:
-            # Ensure parent directory exists
             log_path = pathlib.Path(log_file_path)
             log_path.parent.mkdir(parents=True, exist_ok=True)
             with open(log_file_path, 'a') as f:
                 f.write(log_msg + "\n")
-                f.flush()  # Ensure immediate write
-                os.fsync(f.fileno())  # Force write to disk
+                f.flush()
         except Exception as e:
-            logger.error(f"Failed to write log: {e}")
-        logger.info(msg)
+            print(f"Log error: {e}")
+
+    def write_trade(trade_entry: dict):
+        """Write trade entry to diary file for stats tracking."""
+        try:
+            trade_entry['timestamp'] = datetime.now(timezone.utc).isoformat()
+            diary_path = pathlib.Path(diary_file_path)
+            diary_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(diary_file_path, 'a') as f:
+                f.write(json.dumps(trade_entry) + "\n")
+                f.flush()
+        except Exception as e:
+            log(f"Failed to write trade: {e}")
+
+    log("Subprocess started, beginning imports...")
+
+    try:
+        sys.path.append(str(pathlib.Path(__file__).parent.parent))
+
+        # Set environment variables for this agent BEFORE importing config_loader
+        os.environ['HYPERLIQUID_PRIVATE_KEY'] = config.private_key
+        os.environ['HYPERLIQUID_ACCOUNT_ADDRESS'] = config.public_key
+
+        log("Importing config_loader...")
+        from src import config_loader
+        config_loader.CONFIG['hyperliquid_private_key'] = config.private_key
+        config_loader.CONFIG['hyperliquid_account_address'] = config.public_key
+
+        log("Importing TradingAgent...")
+        from src.agent.decision_maker import TradingAgent
+        log("Importing LocalIndicatorCalculator...")
+        from src.indicators.local_indicators import LocalIndicatorCalculator
+        log("Importing HyperliquidAPI...")
+        from src.trading.hyperliquid_api import HyperliquidAPI
+        from src.utils.formatting import format_number as fmt
+        from src.utils.prompt_utils import json_default, round_or_none, round_series
+        import json
+        import math
+        from collections import OrderedDict, deque
+        log("All imports successful!")
+    except Exception as e:
+        log(f"FATAL import error: {e}")
+        log(traceback.format_exc())
+        return
 
     def get_interval_seconds(interval_str):
         if interval_str.endswith('m'):
@@ -133,9 +197,18 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
         else:
             raise ValueError(f"Unsupported interval: {interval_str}")
 
-    taapi = LocalIndicatorCalculator()
-    hyperliquid = HyperliquidAPI()
-    agent = TradingAgent(risk_profile=config.risk_profile)
+    try:
+        log("Initializing indicators...")
+        taapi = LocalIndicatorCalculator()
+        log("Initializing Hyperliquid API...")
+        hyperliquid = HyperliquidAPI()
+        log("Initializing trading agent...")
+        agent = TradingAgent(risk_profile=config.risk_profile)
+    except Exception as e:
+        log(f"FATAL: Failed to initialize: {e}")
+        import traceback
+        log(traceback.format_exc())
+        return
 
     start_time = datetime.now(timezone.utc)
     invocation_count = 0
@@ -175,15 +248,16 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
                     coin = pos.get('coin')
                     if coin:
                         current_px = await hyperliquid.get_current_price(coin)
-                        szi = pos.get('szi', 0)
+                        szi_raw = pos.get('szi', 0)
+                        szi = float(szi_raw) if szi_raw else 0.0
                         if szi != 0:  # Only log non-zero positions
                             side = "LONG" if szi > 0 else "SHORT"
-                            pnl = round_or_none(pos.get('pnl'), 4) or 0
+                            pnl = float(pos.get('pnl', 0) or 0)
                             log(f"Position {coin}: {side} {abs(szi):.6f} @ ${round_or_none(pos.get('entryPx'), 2)} | PnL: ${pnl:.2f}")
 
                         positions.append({
                             "symbol": coin,
-                            "quantity": round_or_none(szi, 6),
+                            "quantity": round(szi, 6) if szi else 0,
                             "entry_price": round_or_none(pos.get('entryPx'), 2),
                             "current_price": round_or_none(current_px, 2),
                             "unrealized_pnl": round_or_none(pos.get('pnl'), 4),
@@ -317,6 +391,36 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
 
                             log(f"Order result for {asset}: {order}")
 
+                            # Check if order was filled
+                            order_filled = False
+                            fill_price = current_price
+                            fill_size = amount
+                            if isinstance(order, dict) and order.get('status') == 'ok':
+                                response = order.get('response', {})
+                                if response.get('type') == 'order':
+                                    statuses = response.get('data', {}).get('statuses', [])
+                                    if statuses and 'filled' in statuses[0]:
+                                        order_filled = True
+                                        fill_price = float(statuses[0]['filled'].get('avgPx', current_price))
+                                        fill_size = float(statuses[0]['filled'].get('totalSz', amount))
+
+                            # Write trade to diary for stats
+                            if order_filled:
+                                write_trade({
+                                    "asset": asset,
+                                    "action": action,
+                                    "side": "LONG" if is_buy else "SHORT",
+                                    "amount": fill_size,
+                                    "entry_price": fill_price,
+                                    "allocation_usd": alloc_usd,
+                                    "notional": fill_price * fill_size,
+                                    "tp_price": tp_price,
+                                    "sl_price": sl_price,
+                                    "rationale": rationale,
+                                    "order_result": str(order),
+                                    "filled": True,
+                                })
+
                             # Place TP/SL if specified
                             if tp_price:
                                 await hyperliquid.place_take_profit(asset, is_buy, amount, tp_price)
@@ -338,21 +442,66 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
                     except Exception as e:
                         log(f"Execution error {asset}: {e}")
 
-                log(f"Sleeping for {config.interval}...")
-                await asyncio.sleep(get_interval_seconds(config.interval))
+                # Debug mode: run every 15 seconds for rapid trading
+                if config.risk_profile == "debug":
+                    log("Debug mode: sleeping 15 seconds...")
+                    await asyncio.sleep(15)
+                else:
+                    log(f"Sleeping for {config.interval}...")
+                    await asyncio.sleep(get_interval_seconds(config.interval))
 
             except Exception as e:
                 log(f"Loop error: {e}")
                 await asyncio.sleep(60)
 
-    asyncio.run(run_loop())
+    try:
+        asyncio.run(run_loop())
+    except Exception as e:
+        log(f"FATAL: run_loop crashed: {e}")
+        import traceback
+        log(traceback.format_exc())
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic."""
     logger.info("Multi-user agent server starting...")
+
+    # Restore agents from disk
+    saved_data = load_registry()
+    for session_id, agent_data in saved_data.items():
+        if agent_data.get("running", False):
+            logger.info(f"Restoring agent for session {session_id}...")
+            try:
+                config = AgentConfig(
+                    assets=agent_data["assets"],
+                    interval=agent_data["interval"],
+                    risk_profile=agent_data.get("risk_profile", "conservative"),
+                    private_key=agent_data["private_key"],
+                    public_key=agent_data["public_key"],
+                )
+                agent = AgentInstance(session_id, config)
+                agent.paused = agent_data.get("paused", False)
+
+                # Restart the agent process
+                agent.process = multiprocessing.Process(
+                    target=run_agent_process,
+                    args=(config, str(agent.log_file)),
+                    daemon=True
+                )
+                agent.process.start()
+                agent.started_at = datetime.now(timezone.utc)
+                agent_registry[session_id] = agent
+
+                logger.info(f"Restored and started agent for session {session_id}")
+            except Exception as e:
+                logger.error(f"Failed to restore agent {session_id}: {e}")
+
     yield
+
+    # Save registry before shutdown
+    save_registry()
+
     # Cleanup: stop all agents
     for session_id, agent in list(agent_registry.items()):
         if agent.is_running():
@@ -423,6 +572,9 @@ async def start_agent(req: StartAgentRequest):
 
     agent_registry[session_id] = agent
 
+    # Save to disk for persistence
+    save_registry()
+
     logger.info(f"Started agent for session {session_id} with assets {req.assets}")
 
     return {
@@ -449,7 +601,12 @@ async def stop_agent(req: StopAgentRequest):
         agent.process.join(timeout=5)
         agent.append_log(f"[{datetime.now(timezone.utc).isoformat()}] Agent stopped")
 
-    del agent_registry[session_id]
+    # Keep config in registry but mark as stopped (process is None now)
+    agent.process = None
+
+    # Save to disk for persistence (keeps the config for UI restoration)
+    save_registry()
+
     logger.info(f"Stopped agent for session {session_id}")
 
     return {"success": True, "message": "Agent stopped"}
@@ -459,6 +616,18 @@ async def stop_agent(req: StopAgentRequest):
 async def get_agent_status(session_id: str):
     """Get status of an agent."""
     if session_id not in agent_registry:
+        # Check if we have saved config for this session (agent was stopped but config remembered)
+        saved_data = load_registry()
+        if session_id in saved_data:
+            saved = saved_data[session_id]
+            return {
+                "running": False,
+                "paused": False,
+                "session_id": session_id,
+                "assets": saved.get("assets"),
+                "interval": saved.get("interval"),
+                "risk_profile": saved.get("risk_profile"),
+            }
         return {
             "running": False,
             "paused": False,
@@ -474,6 +643,7 @@ async def get_agent_status(session_id: str):
         "started_at": agent.started_at.isoformat() if agent.started_at else None,
         "assets": agent.config.assets,
         "interval": agent.config.interval,
+        "risk_profile": agent.config.risk_profile,
     }
 
 
@@ -521,6 +691,7 @@ async def pause_agent(req: StopAgentRequest):
 
     agent = agent_registry[session_id]
     agent.paused = True
+    save_registry()
 
     return {"success": True, "message": "Agent paused"}
 
@@ -535,8 +706,198 @@ async def resume_agent(req: StopAgentRequest):
 
     agent = agent_registry[session_id]
     agent.paused = False
+    save_registry()
 
     return {"success": True, "message": "Agent resumed"}
+
+
+class ClosePositionRequest(BaseModel):
+    asset: str
+    private_key: str
+    public_key: str
+    size: Optional[float] = None  # Position size (avoids extra API call if provided)
+    side: Optional[str] = None    # "LONG" or "SHORT" (avoids extra API call if provided)
+
+
+class CloseAllPositionsRequest(BaseModel):
+    private_key: str
+    public_key: str
+
+
+# Cache for HyperliquidAPI instances (keyed by public_key)
+_api_cache: Dict[str, Any] = {}
+
+
+@app.post("/close-position")
+async def close_position(req: ClosePositionRequest):
+    """Close a specific position for an asset."""
+    global _api_cache
+    try:
+        # Set environment variables for this request
+        os.environ['HYPERLIQUID_PRIVATE_KEY'] = req.private_key
+        os.environ['HYPERLIQUID_ACCOUNT_ADDRESS'] = req.public_key
+
+        # Import and configure
+        from src import config_loader
+        config_loader.CONFIG['hyperliquid_private_key'] = req.private_key
+        config_loader.CONFIG['hyperliquid_account_address'] = req.public_key
+        network = os.getenv('HYPERLIQUID_NETWORK', 'mainnet')
+        config_loader.CONFIG['hyperliquid_network'] = network
+
+        from src.trading.hyperliquid_api import HyperliquidAPI
+
+        logger.info(f"Closing {req.asset} | size={req.size} side={req.side}")
+
+        # Use cached API instance or create new one
+        cache_key = req.public_key
+        if cache_key not in _api_cache:
+            _api_cache[cache_key] = HyperliquidAPI()
+            logger.info(f"Created new HyperliquidAPI for {cache_key[:10]}...")
+        api = _api_cache[cache_key]
+
+        # If size and side provided, skip the get_user_state API call
+        if req.size and req.side:
+            size = req.size
+            is_buy = req.side == "SHORT"  # If SHORT, buy to close; if LONG, sell to close
+            logger.info(f"Using provided size={size}, is_buy={is_buy} (skipped state fetch)")
+        else:
+            # Fallback: fetch state to get position info
+            logger.info(f"No size/side provided, fetching user state...")
+            state = await api.get_user_state()
+            positions = state.get('positions', [])
+
+            position = None
+            for pos in positions:
+                if pos.get('coin') == req.asset:
+                    position = pos
+                    break
+
+            if not position:
+                return {"success": False, "error": f"No open position for {req.asset}", "asset": req.asset}
+
+            szi = float(position.get('szi', 0))
+            if szi == 0:
+                return {"success": False, "error": f"Position size is 0 for {req.asset}", "asset": req.asset}
+
+            is_buy = szi < 0
+            size = abs(szi)
+
+        logger.info(f"Closing {req.asset}: {'BUY' if is_buy else 'SELL'} {size}")
+
+        # Use market_open with the opposite direction to close the position
+        # This is more reliable than market_close which relies on SDK's internal position cache
+        # Using 15% slippage to handle volatile testnet oracle prices
+        result = await api._retry(
+            lambda: api.exchange.market_open(req.asset, is_buy, size, None, 0.15)
+        )
+
+        logger.info(f"Close result for {req.asset}: {result}")
+        logger.info(f"Result type: {type(result)}")
+        if isinstance(result, dict):
+            logger.info(f"Result keys: {result.keys()}")
+            logger.info(f"Result status: {result.get('status')}")
+            logger.info(f"Result response: {result.get('response')}")
+
+        # Check if result indicates an error
+        if result and isinstance(result, dict):
+            status = result.get('status')
+            if status == 'err':
+                error_msg = result.get('response', 'Unknown error from exchange')
+                logger.error(f"Exchange error closing {req.asset}: {error_msg}")
+                return {"success": False, "error": str(error_msg), "asset": req.asset}
+
+        return {"success": True, "result": result, "asset": req.asset}
+    except Exception as e:
+        logger.error(f"Failed to close position for {req.asset}: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/close-all")
+async def close_all_positions(req: CloseAllPositionsRequest):
+    """Close all open positions."""
+    try:
+        # Set environment variables for this request
+        os.environ['HYPERLIQUID_PRIVATE_KEY'] = req.private_key
+        os.environ['HYPERLIQUID_ACCOUNT_ADDRESS'] = req.public_key
+
+        # Import and configure
+        from src import config_loader
+        config_loader.CONFIG['hyperliquid_private_key'] = req.private_key
+        config_loader.CONFIG['hyperliquid_account_address'] = req.public_key
+        # Ensure network is set from environment
+        network = os.getenv('HYPERLIQUID_NETWORK', 'mainnet')
+        config_loader.CONFIG['hyperliquid_network'] = network
+
+        from src.trading.hyperliquid_api import HyperliquidAPI
+
+        logger.info(f"=== CLOSE ALL POSITIONS DEBUG ===")
+        logger.info(f"Network: {network}")
+        logger.info(f"Account: {req.public_key}")
+
+        api = HyperliquidAPI()
+        logger.info(f"API base_url: {api.base_url}")
+        logger.info(f"API account_address: {api.account_address}")
+
+        # Get all positions
+        state = await api.get_user_state()
+        logger.info(f"User state positions: {state.get('positions', [])}")
+        positions = state.get('positions', [])
+        logger.info(f"Found {len(positions)} positions to close")
+
+        closed = []
+        errors = []
+
+        for pos in positions:
+            coin = pos.get('coin')
+            szi = float(pos.get('szi', 0))
+
+            if coin and szi != 0:
+                try:
+                    logger.info(f"Closing {coin} position (size: {szi})...")
+
+                    # Instead of market_close, place a market order in opposite direction
+                    # szi > 0 means LONG, need to SELL to close
+                    # szi < 0 means SHORT, need to BUY to close
+                    is_buy = szi < 0  # If short (negative), buy to close
+                    size = abs(szi)
+
+                    logger.info(f"Placing {'BUY' if is_buy else 'SELL'} order for {size} {coin} to close position")
+
+                    # Use market_open with reduce_only behavior via the exchange directly
+                    result = await api._retry(
+                        lambda: api.exchange.market_open(coin, is_buy, size, None, 0.05)
+                    )
+                    logger.info(f"Close result for {coin}: {result}")
+
+                    # Check if result is None
+                    if result is None:
+                        errors.append({"asset": coin, "error": "Order returned None"})
+                        logger.error(f"Order returned None for {coin}")
+                        continue
+
+                    # Check if result indicates an error
+                    if isinstance(result, dict):
+                        status = result.get('status')
+                        if status == 'err':
+                            error_msg = result.get('response', 'Unknown error')
+                            errors.append({"asset": coin, "error": str(error_msg)})
+                            logger.error(f"Exchange error closing {coin}: {error_msg}")
+                            continue
+
+                    closed.append({"asset": coin, "result": result})
+                except Exception as e:
+                    errors.append({"asset": coin, "error": str(e)})
+                    logger.error(f"Failed to close {coin}: {e}")
+
+        return {
+            "success": len(errors) == 0,
+            "closed": len(closed),
+            "closed_positions": closed,
+            "errors": errors,
+        }
+    except Exception as e:
+        logger.error(f"Failed to close all positions: {e}")
+        return {"success": False, "error": str(e)}
 
 
 @app.get("/health")

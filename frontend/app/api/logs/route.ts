@@ -7,6 +7,134 @@ import { getFullSession } from '@/lib/session';
 // Backend API URL (Python server)
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
+// Fetch total PnL (account value - deposits) from Hyperliquid - matches their UI calculation
+async function fetchTotalPnL(publicKey: string): Promise<number> {
+  const network = process.env.HYPERLIQUID_NETWORK || 'mainnet';
+  const apiBase = network === 'testnet'
+    ? 'https://api.hyperliquid-testnet.xyz'
+    : 'https://api.hyperliquid.xyz';
+
+  try {
+    // Get account value
+    const stateRes = await fetch(`${apiBase}/info`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'clearinghouseState', user: publicKey }),
+    });
+    const state = await stateRes.json();
+    const accountValue = parseFloat(state?.marginSummary?.accountValue || '0');
+
+    // Get deposits/withdrawals
+    const ledgerRes = await fetch(`${apiBase}/info`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'userNonFundingLedgerUpdates',
+        user: publicKey,
+        startTime: 0,
+        endTime: Date.now(),
+      }),
+    });
+    const ledger = await ledgerRes.json();
+
+    // Sum all deposits/withdrawals
+    let netDeposits = 0;
+    if (Array.isArray(ledger)) {
+      for (const entry of ledger) {
+        const delta = entry?.delta;
+        if (delta?.type === 'internalTransfer' || delta?.type === 'deposit') {
+          netDeposits += parseFloat(delta?.usdc || '0');
+        } else if (delta?.type === 'withdraw') {
+          netDeposits -= parseFloat(delta?.usdc || '0');
+        }
+      }
+    }
+
+    // PnL = Account Value - Net Deposits (matches Hyperliquid UI)
+    return accountValue - netDeposits;
+  } catch (error) {
+    console.error('Failed to fetch total PnL:', error);
+    return 0;
+  }
+}
+
+// Fetch user fills (completed trades) from Hyperliquid
+async function fetchHyperliquidFills(publicKey: string): Promise<Array<{
+  id: string;
+  asset: string;
+  action: string;
+  dir: string;
+  date: string;
+  price: number;
+  quantity: number;
+  notional: number;
+  side: string;
+  time: number;
+  fee: number;
+  closedPnl: number;
+  hash: string | null;
+}>> {
+  const network = process.env.HYPERLIQUID_NETWORK || 'mainnet';
+  const apiBase = network === 'testnet'
+    ? 'https://api.hyperliquid-testnet.xyz'
+    : 'https://api.hyperliquid.xyz';
+
+  try {
+    const response = await fetch(`${apiBase}/info`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'userFillsByTime',
+        user: publicKey,
+        startTime: Date.now() - 90 * 24 * 60 * 60 * 1000, // Last 90 days
+        endTime: Date.now(),
+      }),
+    });
+
+    if (!response.ok) return [];
+    const fills = await response.json();
+    if (!Array.isArray(fills)) return [];
+
+    return fills.map((fill: {
+      coin: string;
+      side: string;
+      dir: string;
+      px: string;
+      sz: string;
+      time: number;
+      fee: string;
+      closedPnl: string;
+      oid: number;
+      hash?: string;
+      tid?: number;
+    }) => {
+      // dir: "Open Long", "Open Short", "Close Long", "Close Short"
+      const isClose = fill.dir.toLowerCase().includes('close');
+      const isLong = fill.dir.toLowerCase().includes('long');
+
+      return {
+        id: `fill-${fill.oid}-${fill.time}`,
+        asset: fill.coin,
+        action: isClose ? (isLong ? 'CLOSE LONG' : 'CLOSE SHORT') : (isLong ? 'LONG' : 'SHORT'),
+        dir: fill.dir,
+        date: new Date(fill.time).toLocaleString(),
+        price: parseFloat(fill.px),
+        quantity: parseFloat(fill.sz),
+        notional: parseFloat(fill.px) * parseFloat(fill.sz),
+        side: fill.side,
+        time: fill.time,
+        fee: parseFloat(fill.fee),
+        closedPnl: parseFloat(fill.closedPnl),
+        hash: fill.hash || null,
+        tid: fill.tid || null,
+      };
+    });
+  } catch (error) {
+    console.error('Failed to fetch Hyperliquid fills:', error);
+    return [];
+  }
+}
+
 // Fetch live position data from Hyperliquid
 async function fetchLiveHyperliquidData(sessionWallet?: { publicKey: string } | null): Promise<{
   accountState: { balance: number; unrealizedPnl: number; marginUsed: number } | null;
@@ -378,9 +506,11 @@ export async function GET(request: Request) {
 
     // Fetch logs from backend if session exists
     let backendLogs: string[] = [];
+    let hyperliquidFills: Awaited<ReturnType<typeof fetchHyperliquidFills>> = [];
+    let totalPnLFromHyperliquid = 0;
     if (session) {
       try {
-        const logsResponse = await fetch(`${BACKEND_URL}/logs/${session.sessionId}?limit=${limit}`);
+        const logsResponse = await fetch(`${BACKEND_URL}/logs/${session.publicKey}?limit=${limit}`);
         if (logsResponse.ok) {
           const logsData = await logsResponse.json();
           backendLogs = logsData.logs || [];
@@ -388,24 +518,48 @@ export async function GET(request: Request) {
       } catch (err) {
         console.error('Failed to fetch backend logs:', err);
       }
+
+      // Fetch recent fills from Hyperliquid
+      try {
+        hyperliquidFills = await fetchHyperliquidFills(session.publicKey);
+      } catch (err) {
+        console.error('Failed to fetch Hyperliquid fills:', err);
+      }
+
+      // Fetch total PnL (account value - deposits) - matches Hyperliquid UI
+      try {
+        totalPnLFromHyperliquid = await fetchTotalPnL(session.publicKey);
+      } catch (err) {
+        console.error('Failed to fetch total PnL:', err);
+      }
     }
 
+    // Use per-user diary file if session exists, otherwise fall back to global diary
     const projectRoot = path.resolve(process.cwd(), '..');
-    const diaryPath = path.join(projectRoot, 'diary.jsonl');
+    const globalDiaryPath = path.join(projectRoot, 'diary.jsonl');
+    const userDiaryPath = session ? `/tmp/rez_logs/${session.publicKey}_diary.jsonl` : null;
 
-    // Parse diary entries if file exists, otherwise use empty array
+    // Parse diary entries from per-user file first, then fall back to global
     const entries: DiaryEntry[] = [];
-    if (existsSync(diaryPath)) {
-      const content = readFileSync(diaryPath, 'utf-8');
-      const lines = content.trim().split('\n').filter(line => line.trim());
+    const diaryPaths = userDiaryPath ? [userDiaryPath, globalDiaryPath] : [globalDiaryPath];
 
-      for (const line of lines) {
+    for (const diaryPath of diaryPaths) {
+      if (existsSync(diaryPath)) {
         try {
-          const entry = JSON.parse(line) as DiaryEntry;
-          entries.push(entry);
-        } catch {
-          // Skip malformed lines
-          continue;
+          const content = readFileSync(diaryPath, 'utf-8');
+          const lines = content.trim().split('\n').filter(line => line.trim());
+
+          for (const line of lines) {
+            try {
+              const entry = JSON.parse(line) as DiaryEntry;
+              entries.push(entry);
+            } catch {
+              // Skip malformed lines
+              continue;
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to read diary ${diaryPath}:`, err);
         }
       }
     }
@@ -538,19 +692,6 @@ export async function GET(request: Request) {
       const mins = avgMins % 60;
 
       return `${days}d ${hours}h ${mins}m`;
-    };
-
-    // Calculate stats
-    const stats: AgentStats = {
-      totalTrades: tradeEntries.length,
-      winRate: completedTrades.length > 0
-        ? (completedTrades.filter(t => t.pnl > 0).length / completedTrades.length) * 100
-        : 0,
-      totalPnl: completedTrades.reduce((sum, t) => sum + t.pnl, 0),
-      avgHoldTime: calculateAvgHoldTime(),
-      holdDecisions: holdEntries.length,
-      buyDecisions: tradeEntries.filter(e => e.action === 'buy').length,
-      sellDecisions: tradeEntries.filter(e => e.action === 'sell').length,
     };
 
     // Parse prompts.log for market context
@@ -702,21 +843,19 @@ export async function GET(request: Request) {
       liquidationPrice: pos.liquidationPrice,
     }));
 
-    // Use live account state from Hyperliquid, fallback to prompts.log
-    let accountState = liveData.accountState;
-    if (!accountState && latestPrompt?.account) {
-      const acc = latestPrompt.account;
-      accountState = {
-        balance: acc.account_value || acc.balance || 0,
-        unrealizedPnl: 0,
-        marginUsed: 0,
-      };
-    }
+    // Always use live account state from Hyperliquid (no stale fallback)
+    const accountState = liveData.accountState;
 
-    // Add backend logs as enriched messages (agent output from multi-user backend)
+    // Add backend logs as enriched messages - ONLY LLM reasoning summaries
     for (const log of backendLogs) {
-      // Parse timestamp from log format: [2024-01-01T12:00:00.000Z] message OR 2024-01-01 12:00:00,000 - INFO - message
-      let match = log.match(/^\[([^\]]+)\]\s*(.+)$/);
+      // Only include LLM reasoning summaries (the agent's actual thoughts)
+      // Skip technical logs like "Importing...", "Initializing...", etc.
+      if (!log.includes('LLM reasoning summary:')) {
+        continue;
+      }
+
+      // Parse timestamp from log format: [2024-01-01T12:00:00.000Z] message
+      const match = log.match(/^\[([^\]]+)\]\s*LLM reasoning summary:\s*(.+)$/);
       if (match) {
         enrichedMessages.push({
           id: `backend-${match[1]}-${Math.random()}`,
@@ -724,34 +863,106 @@ export async function GET(request: Request) {
           message: match[2],
           timestamp: new Date(match[1]).toLocaleString(),
         });
-      } else {
-        // Try Python logging format: 2024-01-01 12:00:00,000 - LEVEL - message
-        match = log.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}),?\d*\s*-\s*\w+\s*-\s*(.+)$/);
-        if (match) {
-          enrichedMessages.push({
-            id: `backend-${match[1]}-${Math.random()}`,
-            type: 'reasoning',
-            message: match[2],
-            timestamp: new Date(match[1].replace(' ', 'T')).toLocaleString(),
-          });
-        } else if (log.trim()) {
-          // Fallback: just show the log as-is
-          enrichedMessages.push({
-            id: `backend-${Date.now()}-${Math.random()}`,
-            type: 'reasoning',
-            message: log,
-            timestamp: new Date().toLocaleString(),
-          });
-        }
       }
     }
+
+    // Helper to format holding time
+    const formatHoldingTime = (ms: number): string => {
+      const mins = Math.floor(ms / 60000);
+      const hours = Math.floor(mins / 60);
+      const days = Math.floor(hours / 24);
+      if (days > 0) return `${days}d ${hours % 24}h`;
+      if (hours > 0) return `${hours}h ${mins % 60}m`;
+      return `${mins}m`;
+    };
+
+    // Sort fills by time (oldest first for pairing)
+    const sortedFills = [...hyperliquidFills].sort((a, b) => a.time - b.time);
+
+    // Track opening fills per asset to calculate holding time
+    const openPositions: Map<string, { time: number; price: number }[]> = new Map();
+
+    // Process fills to pair opens with closes
+    const processedTrades = sortedFills.map(fill => {
+      const isClose = fill.dir?.toLowerCase().includes('close');
+      const asset = fill.asset;
+
+      let holdingTime = '-';
+      let entryPrice = fill.price;
+
+      if (!isClose) {
+        // Opening fill - track it
+        if (!openPositions.has(asset)) {
+          openPositions.set(asset, []);
+        }
+        openPositions.get(asset)!.push({ time: fill.time, price: fill.price });
+      } else {
+        // Closing fill - find matching open
+        const opens = openPositions.get(asset);
+        if (opens && opens.length > 0) {
+          const openFill = opens.shift()!; // FIFO matching
+          const holdMs = fill.time - openFill.time;
+          holdingTime = formatHoldingTime(holdMs);
+          entryPrice = openFill.price;
+        }
+      }
+
+      return {
+        id: fill.id,
+        asset: fill.asset,
+        action: fill.action,
+        date: fill.date,
+        priceFrom: entryPrice,
+        priceTo: fill.price,
+        quantity: fill.quantity,
+        notionalFrom: entryPrice * fill.quantity,
+        notionalTo: fill.notional,
+        holdingTime,
+        pnl: fill.closedPnl,
+        dir: fill.dir,
+        time: fill.time,
+        hash: fill.hash,
+      };
+    });
+
+    // Sort by time descending for display (most recent first)
+    const allFillBasedTrades = processedTrades.sort((a, b) => b.time - a.time);
+
+    // For display, only show closing trades (have "Close" in dir field)
+    const closingFills = allFillBasedTrades.filter(t =>
+      t.dir?.toLowerCase().includes('close') || t.pnl !== 0
+    );
+    const displayTrades = closingFills.slice(0, 200);
+
+    // Use Hyperliquid fills if available, otherwise fall back to diary-based trades
+    const finalCompletedTrades = displayTrades.length > 0 ? displayTrades : completedTrades.reverse();
+
+    // For stats, use closing fills (trades with actual P&L) for accurate win rate
+    const allClosingFills = allFillBasedTrades.filter(t =>
+      t.dir?.toLowerCase().includes('close') || t.pnl !== 0
+    );
+    const tradesWithPnL = allClosingFills.length > 0 ? allClosingFills : completedTrades;
+
+    // Calculate stats - win rate from closing trades only
+    // Use Hyperliquid's total PnL (account value - deposits) which matches their UI
+    const finalStats: AgentStats = {
+      totalTrades: allFillBasedTrades.length || completedTrades.length,
+      winRate: tradesWithPnL.length > 0
+        ? (tradesWithPnL.filter(t => t.pnl > 0).length / tradesWithPnL.length) * 100
+        : 0,
+      totalPnl: totalPnLFromHyperliquid || tradesWithPnL.reduce((sum, t) => sum + (t.pnl || 0), 0),
+      avgHoldTime: calculateAvgHoldTime(),
+      holdDecisions: holdEntries.length,
+      buyDecisions: allFillBasedTrades.filter(t => t.action?.toLowerCase().includes('buy') || t.action?.toLowerCase().includes('long')).length,
+      sellDecisions: allFillBasedTrades.filter(t => t.action?.toLowerCase().includes('sell') || t.action?.toLowerCase().includes('short')).length,
+    };
 
     return NextResponse.json({
       entries: recentEntries,
       enrichedMessages,
-      completedTrades: completedTrades.reverse(),
+      completedTrades: finalCompletedTrades,
       positions: livePositions,
-      stats,
+      stats: finalStats,
       accountState,
       backendLogs,
     });

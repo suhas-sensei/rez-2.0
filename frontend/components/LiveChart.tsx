@@ -73,6 +73,7 @@ export default function LiveChart({ symbol = 'ETHUSDT' }: LiveChartProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [chartHeight, setChartHeight] = useState(65); // percentage
   const [isDraggingDivider, setIsDraggingDivider] = useState(false);
+  const [isChartLoading, setIsChartLoading] = useState(true);
 
   // Get interval duration in seconds
   const getIntervalSeconds = (interval: string): number => {
@@ -89,6 +90,7 @@ export default function LiveChart({ symbol = 'ETHUSDT' }: LiveChartProps) {
   };
 
   const fetchHistoricalData = useCallback(async (interval: string, type: 'line' | 'candle', mode: 'Price' | 'MCap') => {
+    setIsChartLoading(true);
     try {
       const hlInterval = INTERVAL_MAP[interval] || '1m';
       const endTime = Date.now();
@@ -128,6 +130,7 @@ export default function LiveChart({ symbol = 'ETHUSDT' }: LiveChartProps) {
           setCurrentPrice(lastValue);
           setPriceChange(((lastValue - firstValue) / firstValue) * 100);
           chartRef.current?.timeScale().fitContent();
+          setIsChartLoading(false);
         }
       } else {
         const chartData: CandlestickData<Time>[] = data.map((item: { t: number; o: string; h: string; l: string; c: string }) => ({
@@ -145,10 +148,12 @@ export default function LiveChart({ symbol = 'ETHUSDT' }: LiveChartProps) {
           setCurrentPrice(lastValue);
           setPriceChange(((lastValue - firstValue) / firstValue) * 100);
           chartRef.current?.timeScale().fitContent();
+          setIsChartLoading(false);
         }
       }
     } catch (error) {
       console.error('Failed to fetch historical data:', error);
+      setIsChartLoading(false);
     }
   }, [symbol, coin]);
 
@@ -536,9 +541,15 @@ export default function LiveChart({ symbol = 'ETHUSDT' }: LiveChartProps) {
       {/* Chart container */}
       <div
         ref={chartContainerRef}
-        className="w-full bg-white overflow-hidden"
+        className="w-full bg-white overflow-hidden relative"
         style={{ height: `${chartHeight}%` }}
-      />
+      >
+        {isChartLoading && (
+          <div className="absolute inset-0 flex items-center justify-center z-10 bg-white">
+            <img src="/rez.png" alt="Loading..." className="w-8 h-8 animate-pulse" />
+          </div>
+        )}
+      </div>
 
       {/* Horizontal Resizable Divider */}
       <div

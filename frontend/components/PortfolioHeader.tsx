@@ -19,6 +19,7 @@ interface PortfolioHeaderProps {
   onCloseAllPositions?: () => void;
   positionsCount?: number;
   isClosingPositions?: boolean;
+  isAgentRunning?: boolean;
 }
 
 export default function PortfolioHeader({
@@ -30,6 +31,7 @@ export default function PortfolioHeader({
   onCloseAllPositions,
   positionsCount = 0,
   isClosingPositions = false,
+  isAgentRunning = false,
 }: PortfolioHeaderProps) {
   const isLoading = !accountState;
   const { formatAmount } = useCurrency();
@@ -132,6 +134,8 @@ export default function PortfolioHeader({
             <p className="text-[10px] xl:text-xs text-gray-400 uppercase tracking-wider mb-1">Unrealized P&L</p>
             {isLoading ? (
               <div className="h-6 w-16 bg-gray-200 animate-pulse rounded mx-auto" />
+            ) : !isAgentRunning ? (
+              <p className="text-base xl:text-lg font-semibold text-gray-400">--</p>
             ) : (
               <p className="flex items-baseline justify-center gap-1">
                 <span className={`text-base xl:text-lg font-semibold ${
@@ -151,6 +155,8 @@ export default function PortfolioHeader({
             <p className="text-[10px] xl:text-xs text-gray-400 uppercase tracking-wider mb-1">Margin Used</p>
             {isLoading ? (
               <div className="h-6 w-16 bg-gray-200 animate-pulse rounded mx-auto" />
+            ) : !isAgentRunning ? (
+              <p className="text-base xl:text-lg font-semibold text-gray-400">--</p>
             ) : (
               <p className="text-base xl:text-lg font-semibold text-gray-900">
                 {formatAmount(accountState?.marginUsed ?? 0)}

@@ -1,66 +1,52 @@
 import { NextResponse } from 'next/server';
 import { Wallet } from 'ethers';
 
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+
 export async function POST() {
   const accountAddress = process.env.HYPERLIQUID_ACCOUNT_ADDRESS;
   const privateKey = process.env.HYPERLIQUID_PRIVATE_KEY;
-  const network = process.env.HYPERLIQUID_NETWORK || 'mainnet';
 
   if (!privateKey) {
-    return NextResponse.json({ error: 'Private key not configured' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Private key not configured' }, { status: 500 });
   }
 
-  // Determine query address for fetching positions
-  let queryAddress: string;
+  // Determine public key for the backend
+  let publicKey: string;
   if (accountAddress) {
-    queryAddress = accountAddress;
+    publicKey = accountAddress;
   } else {
     const wallet = new Wallet(privateKey);
-    queryAddress = wallet.address;
+    publicKey = wallet.address;
   }
 
-  const apiBase = network === 'testnet'
-    ? 'https://api.hyperliquid-testnet.xyz'
-    : 'https://api.hyperliquid.xyz';
-
   try {
-    // First, get all open positions
-    const stateResponse = await fetch(`${apiBase}/info`, {
+    // Call the backend API to close all positions
+    console.log(`Calling backend at ${BACKEND_URL}/close-all`);
+
+    const response = await fetch(`${BACKEND_URL}/close-all`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        type: 'clearinghouseState',
-        user: queryAddress,
+        private_key: privateKey,
+        public_key: publicKey,
       }),
     });
-    const stateData = await stateResponse.json();
 
-    if (!stateData.assetPositions || stateData.assetPositions.length === 0) {
-      return NextResponse.json({ success: true, message: 'No positions to close', closed: 0 });
-    }
-
-    // Call the backend agent API to close positions
-    const agentResponse = await fetch('http://localhost:3099/close-all', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    if (!agentResponse.ok) {
-      // If agent API doesn't exist, return positions that need closing
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Backend close-all error:', errorText);
       return NextResponse.json({
         success: false,
-        error: 'Agent API not available. Positions need manual closing.',
-        positions: stateData.assetPositions.map((p: { position: { coin: string; szi: string } }) => ({
-          coin: p.position.coin,
-          size: p.position.szi,
-        })),
+        error: `Backend error: ${response.status} - ${errorText}`,
       });
     }
 
-    const result = await agentResponse.json();
-    return NextResponse.json({ success: true, ...result });
+    const result = await response.json();
+    console.log('Backend close-all result:', result);
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Failed to close positions:', error);
-    return NextResponse.json({ error: 'Failed to close positions' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to connect to backend' }, { status: 500 });
   }
 }

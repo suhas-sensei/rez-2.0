@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   title: "Rez",
   description: "AI-powered trading agent dashboard on Hyperliquid",
   icons: {
-    icon: "/rez1.ico",
+    icon: "/rez.png",
   },
 };
 

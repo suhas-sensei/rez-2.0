@@ -145,7 +145,7 @@ export default function LeaderboardPage() {
             asset?: string;
           }) => ({
             id: msg.id,
-            type: msg.type === 'reasoning' ? 'info' : msg.type === 'market' ? 'info' : msg.type,
+            type: msg.type,
             message: msg.message,
             timestamp: msg.timestamp,
             asset: msg.asset,

@@ -14,6 +14,7 @@ import AccountSettings from '@/components/AccountSettings';
 import MarketingLanding from '@/components/MarketingLanding';
 import Navbar from '@/components/Navbar';
 import AggregateBar from '@/components/AggregateBar';
+import Loading from '@/components/Loading';
 import { useState, useCallback, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTimezone } from '@/context/TimezoneContext';
@@ -137,7 +138,7 @@ function HomeContent() {
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  // Check agent status on mount
+  // Check agent status on mount and poll every 5 seconds
   useEffect(() => {
     const checkAgentStatus = async () => {
       try {
@@ -145,11 +146,26 @@ function HomeContent() {
         const data = await response.json();
         setIsAgentRunning(data.running);
         setIsAgentPaused(data.paused ?? false);
+
+        // Restore last used config from backend (source of truth)
+        if (data.assets && data.assets.length > 0) {
+          setSelectedAssets(data.assets);
+        }
+        if (data.interval) {
+          setSelectedInterval(data.interval);
+        }
+        if (data.riskProfile) {
+          setSelectedProfile(data.riskProfile as RiskProfile);
+        }
       } catch (error) {
         console.error('Failed to check agent status:', error);
       }
     };
     checkAgentStatus();
+
+    // Poll every 5 seconds to keep status in sync across browsers
+    const intervalId = setInterval(checkAgentStatus, 5000);
+    return () => clearInterval(intervalId);
   }, []);
 
   // Fetch wallet address and initial account state when logged in
@@ -164,11 +180,14 @@ function HomeContent() {
           setWalletAddress(data.address);
         }
         if (data.accountState) {
+          const unrealizedPnl = data.accountState.unrealizedPnl ?? 0;
+          const marginUsed = data.accountState.marginUsed ?? 0;
+          const pnlPct = marginUsed > 0 ? (unrealizedPnl / marginUsed) * 100 : 0;
           setAccountState({
             balance: data.accountState.balance ?? 0,
-            unrealizedPnl: data.accountState.unrealizedPnl ?? 0,
-            marginUsed: data.accountState.marginUsed ?? 0,
-            totalReturnPct: 0,
+            unrealizedPnl,
+            marginUsed,
+            totalReturnPct: pnlPct,
           });
         }
       } catch (error) {
@@ -178,17 +197,36 @@ function HomeContent() {
     fetchWalletData();
   }, [isLoggedIn]);
 
-  // Poll logs when agent is running
+  // Fetch completed trades and positions always (even when agent stopped)
   useEffect(() => {
-    if (!isAgentRunning) return;
-
-    const fetchLogs = async () => {
+    const fetchData = async () => {
       try {
         const response = await fetch('/api/logs?limit=100');
         const data = await response.json();
 
-        // Use enriched messages from API (includes market context, LLM reasoning, and conversational summaries)
-        if (data.enrichedMessages && data.enrichedMessages.length > 0) {
+        // Update completed trades always
+        if (data.completedTrades) {
+          setTrades(data.completedTrades);
+        }
+        // Update positions always (from Hyperliquid)
+        if (data.positions && Array.isArray(data.positions)) {
+          setPositions(data.positions);
+        }
+        if (data.stats) {
+          setStats(data.stats);
+        }
+        if (data.accountState) {
+          const unrealizedPnl = data.accountState.unrealizedPnl ?? 0;
+          const marginUsed = data.accountState.marginUsed ?? 0;
+          const pnlPct = marginUsed > 0 ? (unrealizedPnl / marginUsed) * 100 : 0;
+          setAccountState({
+            ...data.accountState,
+            totalReturnPct: pnlPct,
+          });
+        }
+
+        // Only update messages when agent is running
+        if (isAgentRunning && data.enrichedMessages && data.enrichedMessages.length > 0) {
           const newMessages: AgentMessage[] = data.enrichedMessages.map((msg: {
             id: string;
             type: 'market' | 'decision' | 'trade' | 'info' | 'reasoning';
@@ -197,43 +235,26 @@ function HomeContent() {
             asset?: string;
           }) => ({
             id: msg.id,
-            // Map reasoning and market types to appropriate display types
-            type: msg.type === 'reasoning' ? 'info' : msg.type === 'market' ? 'info' : msg.type,
+            type: msg.type,
             message: msg.message,
             timestamp: msg.timestamp,
             asset: msg.asset,
           }));
 
-          // Always update messages when we have new enriched messages
-          // Use message count + latest message id to detect changes
           const messageKey = `${newMessages.length}-${newMessages[0]?.id || ''}`;
           if (messageKey !== lastEntryTimestamp.current) {
             lastEntryTimestamp.current = messageKey;
             setMessages(newMessages);
           }
         }
-
-        // Update completed trades, positions, and stats
-        if (data.completedTrades) {
-          setTrades(data.completedTrades);
-        }
-        if (data.positions && Array.isArray(data.positions)) {
-          setPositions(data.positions);
-        }
-        if (data.stats) {
-          setStats(data.stats);
-        }
-        if (data.accountState) {
-          setAccountState(data.accountState);
-        }
       } catch (error) {
-        console.error('Failed to fetch logs:', error);
+        console.error('Failed to fetch data:', error);
       }
     };
 
-    // Fetch immediately and then poll every 3 seconds for more responsive updates
-    fetchLogs();
-    const interval = setInterval(fetchLogs, 3000);
+    // Fetch immediately and poll every 5 seconds
+    fetchData();
+    const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, [isAgentRunning]);
 
@@ -305,6 +326,37 @@ function HomeContent() {
 
   const handleClearMessages = () => {
     setMessages([]);
+  };
+
+  // Refresh positions after closing
+  const handlePositionsClosed = async () => {
+    try {
+      // Fetch fresh wallet and position data
+      const response = await fetch('/api/wallet');
+      const data = await response.json();
+
+      if (data.accountState) {
+        const unrealizedPnl = data.accountState.unrealizedPnl ?? 0;
+        const marginUsed = data.accountState.marginUsed ?? 0;
+        const pnlPct = marginUsed > 0 ? (unrealizedPnl / marginUsed) * 100 : 0;
+        setAccountState({
+          balance: data.accountState.balance ?? 0,
+          unrealizedPnl,
+          marginUsed,
+          totalReturnPct: pnlPct,
+        });
+      }
+
+      // Also fetch logs to get updated positions list
+      const logsResponse = await fetch('/api/logs?limit=100');
+      const logsData = await logsResponse.json();
+
+      if (logsData.positions && Array.isArray(logsData.positions)) {
+        setPositions(logsData.positions);
+      }
+    } catch (error) {
+      console.error('Failed to refresh positions:', error);
+    }
   };
 
   const handlePauseAgent = async () => {
@@ -459,6 +511,7 @@ function HomeContent() {
                     onCloseAllPositions={handleCloseAllPositions}
                     positionsCount={positions.length}
                     isClosingPositions={isClosingPositions}
+                    isAgentRunning={isAgentRunning}
                   />
                   <RiskProfileSelector
                     selectedProfile={selectedProfile}
@@ -555,6 +608,7 @@ function HomeContent() {
             trades={trades}
             isAgentRunning={isAgentRunning}
             onClearMessages={handleClearMessages}
+            onPositionsClosed={handlePositionsClosed}
           />
         </div>
 
@@ -567,7 +621,7 @@ function HomeContent() {
 
 export default function Home() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<Loading />}>
       <HomeContent />
     </Suspense>
   );

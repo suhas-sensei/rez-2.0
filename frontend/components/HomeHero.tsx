@@ -108,18 +108,25 @@ export default function HomeHero({ onLogin }: HomeHeroProps) {
           {/* Invite Code Input */}
           <div className="isolate flex flex-col items-center gap-3">
             <div className="flex gap-3 items-center">
-              <input
-                type="text"
-                value={inviteCode}
-                onChange={(e) => {
-                  setInviteCode(e.target.value.toUpperCase())
-                  setError("")
-                }}
-                onKeyDown={handleKeyDown}
-                placeholder="Enter invite code"
-                maxLength={4}
-                className="px-4 py-3 text-base font-medium bg-white/10 backdrop-blur-sm text-white border border-white/20 rounded-md outline-none focus:border-white/50 transition-all duration-300 font-inter w-40 text-center uppercase tracking-widest placeholder:text-white/40 placeholder:normal-case placeholder:tracking-normal"
-              />
+              <div className="relative w-40">
+                <input
+                  type="text"
+                  value={inviteCode}
+                  onChange={(e) => {
+                    setInviteCode(e.target.value.toUpperCase())
+                    setError("")
+                  }}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Enter invite code"
+                  maxLength={4}
+                  className="px-4 py-3 text-base font-medium bg-white/10 backdrop-blur-sm text-transparent caret-white border border-white/20 rounded-md outline-none focus:border-white/50 transition-all duration-300 font-inter w-40 text-center uppercase tracking-widest placeholder:text-white/40 placeholder:normal-case placeholder:tracking-normal selection:bg-white/20"
+                />
+                {inviteCode.length > 0 && (
+                  <span className="absolute inset-0 flex items-center justify-center text-base font-medium text-white pointer-events-none tracking-widest font-inter">
+                    {'*'.repeat(inviteCode.length)}
+                  </span>
+                )}
+              </div>
               <button
                 onClick={handleLaunch}
                 disabled={isValidating}

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSession, SESSION_COOKIE_NAME } from '@/lib/session';
+import { createSessionCookie, SESSION_COOKIE_NAME } from '@/lib/session';
 
 // Wallet configurations mapped by invite code
 const WALLET_CONFIGS: Record<string, { privateKey: string; publicKey: string }> = {
@@ -32,8 +32,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid invite code' }, { status: 401 });
     }
 
-    // Create a session for this user
-    const sessionId = createSession(walletConfig, upperCode);
+    // Create session data to store in cookie
+    const sessionData = createSessionCookie(walletConfig, upperCode);
 
     // Create response with session cookie
     const response = NextResponse.json({
@@ -42,7 +42,8 @@ export async function POST(request: Request) {
     });
 
     // Set session cookie (httpOnly for security, 24 hour expiry)
-    response.cookies.set(SESSION_COOKIE_NAME, sessionId, {
+    // Session data is stored directly in the cookie (base64 encoded)
+    response.cookies.set(SESSION_COOKIE_NAME, sessionData, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',

@@ -18,6 +18,8 @@ export interface Trade {
   notionalTo: number;
   holdingTime: string;
   pnl: number;
+  time?: number; // Unix timestamp for sorting
+  hash?: string | null; // Transaction hash for explorer link
 }
 
 export interface Position {
@@ -34,7 +36,7 @@ export interface Position {
 
 export interface AgentMessage {
   id: number | string;
-  type: 'decision' | 'info' | 'trade' | 'error';
+  type: 'decision' | 'info' | 'trade' | 'error' | 'reasoning' | 'market';
   message: string;
   timestamp: string;
   asset?: string;
@@ -55,6 +57,7 @@ interface TradesDashboardProps {
   messages?: AgentMessage[];
   isAgentRunning?: boolean;
   onClearMessages?: () => void;
+  onPositionsClosed?: () => void;
 }
 
 export default function TradesDashboard({
@@ -63,6 +66,7 @@ export default function TradesDashboard({
   messages,
   isAgentRunning = false,
   onClearMessages,
+  onPositionsClosed,
 }: TradesDashboardProps) {
   const { formatAmount } = useCurrency();
   const { formatDateTime } = useTimezone();
@@ -75,7 +79,7 @@ export default function TradesDashboard({
   // Use provided messages or default
   const resolvedMessages = messages ?? defaultMessages;
 
-  const [activeTab, setActiveTab] = useState('MODELCHAT');
+  const [activeTab, setActiveTab] = useState('AGENT CHAT');
   const [isClosingPositions, setIsClosingPositions] = useState(false);
   const [closingPositionId, setClosingPositionId] = useState<string | number | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
@@ -83,6 +87,73 @@ export default function TradesDashboard({
   const [isClearing, setIsClearing] = useState(false);
   const [displayedMessages, setDisplayedMessages] = useState(resolvedMessages);
   const [newMessageIds, setNewMessageIds] = useState<Set<string | number>>(new Set());
+  const [sortBy, setSortBy] = useState<'date' | 'pnl' | 'holdingTime' | 'entry' | 'exit' | 'quantity'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+
+  // Helper to parse holding time to minutes for sorting
+  const parseHoldingTime = (ht: string): number => {
+    if (!ht || ht === '-' || ht === '< 1m') return 0;
+    let mins = 0;
+    const dayMatch = ht.match(/(\d+)d/);
+    const hourMatch = ht.match(/(\d+)h/);
+    const minMatch = ht.match(/(\d+)m/);
+    if (dayMatch) mins += parseInt(dayMatch[1]) * 24 * 60;
+    if (hourMatch) mins += parseInt(hourMatch[1]) * 60;
+    if (minMatch) mins += parseInt(minMatch[1]);
+    return mins;
+  };
+
+  // Compute sorted trades directly (not in useEffect to avoid timing issues)
+  const sortedTrades = (() => {
+    if (!trades || trades.length === 0) return [];
+
+    const limitedTrades = trades.slice(0, 150);
+
+    const sorted = [...limitedTrades].sort((a, b) => {
+      let aVal = 0;
+      let bVal = 0;
+
+      switch (sortBy) {
+        case 'pnl':
+          aVal = Number(a.pnl) || 0;
+          bVal = Number(b.pnl) || 0;
+          break;
+        case 'holdingTime':
+          aVal = parseHoldingTime(a.holdingTime);
+          bVal = parseHoldingTime(b.holdingTime);
+          break;
+        case 'entry':
+          aVal = Number(a.priceFrom) || 0;
+          bVal = Number(b.priceFrom) || 0;
+          break;
+        case 'exit':
+          aVal = Number(a.priceTo) || 0;
+          bVal = Number(b.priceTo) || 0;
+          break;
+        case 'quantity':
+          // Multiply by large number to handle small decimal precision
+          aVal = (Number(a.quantity) || 0) * 100000000;
+          bVal = (Number(b.quantity) || 0) * 100000000;
+          break;
+        default: // date
+          aVal = a.time || 0;
+          bVal = b.time || 0;
+      }
+
+      // desc: high to low (b - a), asc: low to high (a - b)
+      return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
+    });
+
+    // Debug log
+    console.log(`Sort by ${sortBy} (${sortOrder}):`, sorted.slice(0, 5).map(t => ({
+      qty: t.quantity,
+      pnl: t.pnl,
+      date: t.date
+    })));
+
+    return sorted;
+  })();
 
   // Update displayed messages when messages prop changes (but not when clearing)
   useEffect(() => {
@@ -133,6 +204,9 @@ export default function TradesDashboard({
 
       if (!data.success) {
         setCloseError(data.error || 'Failed to close positions');
+      } else {
+        // Trigger position refresh on success
+        onPositionsClosed?.();
       }
     } catch (error) {
       setCloseError('Network error while closing positions');
@@ -165,6 +239,9 @@ export default function TradesDashboard({
 
       if (!data.success) {
         setCloseError(data.error || `Failed to close ${pos.asset} position`);
+      } else {
+        // Trigger position refresh on success
+        onPositionsClosed?.();
       }
     } catch (error) {
       setCloseError(`Network error closing ${pos.asset} position`);
@@ -213,36 +290,97 @@ export default function TradesDashboard({
               </>
             )}
           </div>
-          {activeTab === 'MODELCHAT' ? (
+          {activeTab === 'AGENT CHAT' ? (
             <span
               className="text-xs xl:text-sm 2xl:text-base text-gray-500 cursor-pointer hover:text-red-500 transition-colors"
               onMouseEnter={() => setShowClearButton(true)}
               onMouseLeave={() => setShowClearButton(false)}
               onClick={handleClearMessagesWithAnimation}
             >
-              {showClearButton && resolvedMessages.length > 0 ? 'Clear Messages' : `${resolvedMessages.length} Messages`}
+              {(() => {
+                const reasoningCount = resolvedMessages.filter(msg => msg.type === 'reasoning').length;
+                return showClearButton && reasoningCount > 0 ? 'Clear Messages' : `${reasoningCount} Messages`;
+              })()}
             </span>
           ) : (
-            <span className="text-xs xl:text-sm 2xl:text-base text-gray-500">
-              {activeTab === 'COMPLETED TRADES' && `${trades.length} Trades`}
-              {activeTab === 'POSITIONS' && `${positions.length} Open Positions`}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs xl:text-sm 2xl:text-base text-gray-500">
+                {activeTab === 'COMPLETED TRADES' && `${sortedTrades.length} Trades`}
+                {activeTab === 'POSITIONS' && `${positions.length} Open Positions`}
+              </span>
+              {activeTab === 'COMPLETED TRADES' && sortedTrades.length > 0 && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowSortDropdown(!showSortDropdown)}
+                    className="p-1 hover:bg-gray-100 rounded transition-colors"
+                    title="Sort trades"
+                  >
+                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                  </button>
+                  {showSortDropdown && (
+                    <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[160px]">
+                      <div className="p-2 border-b border-gray-100">
+                        <span className="text-xs font-medium text-gray-500">Sort by</span>
+                      </div>
+                      {[
+                        { value: 'date', label: 'Date' },
+                        { value: 'pnl', label: 'P&L' },
+                        { value: 'holdingTime', label: 'Holding Time' },
+                        { value: 'entry', label: 'Entry Price' },
+                        { value: 'exit', label: 'Exit Price' },
+                        { value: 'quantity', label: 'Quantity' },
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          onClick={() => {
+                            if (sortBy === option.value) {
+                              setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
+                            } else {
+                              setSortBy(option.value as typeof sortBy);
+                              setSortOrder('desc');
+                            }
+                            setShowSortDropdown(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 flex items-center justify-between ${
+                            sortBy === option.value ? 'bg-gray-50 text-gray-900' : 'text-gray-600'
+                          }`}
+                        >
+                          <span>{option.label}</span>
+                          {sortBy === option.value && (
+                            <span className="text-gray-400">{sortOrder === 'desc' ? '↓' : '↑'}</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
 
       {/* Content */}
       <div className="w-full px-2 sm:px-3 xl:px-6 py-3 xl:py-5 overflow-auto flex-1">
-        {/* MODELCHAT */}
-        {activeTab === 'MODELCHAT' && (
+        {/* AGENT CHAT - Show only the agent's internal monologue (reasoning type) */}
+        {activeTab === 'AGENT CHAT' && (
           <div className="space-y-3 xl:space-y-4 overflow-x-hidden">
-            {displayedMessages.length === 0 ? (
-              <div className="text-center py-10 text-gray-400">
-                <p className="text-sm">No messages yet</p>
-                <p className="text-xs mt-1">Agent activity will appear here</p>
-              </div>
-            ) : (
-              displayedMessages.map((msg, index) => {
+            {(() => {
+              // Filter to show only reasoning messages (agent's self-talk)
+              const reasoningMessages = displayedMessages.filter(msg => msg.type === 'reasoning');
+
+              if (reasoningMessages.length === 0) {
+                return (
+                  <div className="text-center py-10 text-gray-400">
+                    <p className="text-sm">No agent thoughts yet</p>
+                    <p className="text-xs mt-1">The agent's internal reasoning will appear here</p>
+                  </div>
+                );
+              }
+
+              return reasoningMessages.map((msg, index) => {
                 const baseClasses = "bg-gray-50/80 rounded-2xl border border-gray-100 shadow-sm p-4 xl:p-5";
                 const isNewMessage = newMessageIds.has(msg.id);
                 const animationClass = isClearing
@@ -250,7 +388,7 @@ export default function TradesDashboard({
                   : (isNewMessage ? "animate-android-notification" : "");
 
                 // Add staggered delay when clearing - last message disappears first
-                const animationDelay = isClearing ? `${(displayedMessages.length - 1 - index) * 0.1}s` : '0s';
+                const animationDelay = isClearing ? `${(reasoningMessages.length - 1 - index) * 0.1}s` : '0s';
 
                 return (
                   <div
@@ -262,11 +400,11 @@ export default function TradesDashboard({
                       <span className="text-[10px] xl:text-xs font-medium text-gray-600">Agent Rez</span>
                       <span className="text-[10px] xl:text-xs text-gray-400">{msg.timestamp}</span>
                     </div>
-                    <p className="text-[10px] sm:text-xs xl:text-sm text-gray-400 leading-relaxed">{msg.message}</p>
+                    <p className="text-[10px] sm:text-xs xl:text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{msg.message}</p>
                   </div>
                 );
-              })
-            )}
+              });
+            })()}
           </div>
         )}
 
@@ -342,14 +480,14 @@ export default function TradesDashboard({
 
         {/* COMPLETED TRADES */}
         {activeTab === 'COMPLETED TRADES' && (
-          <div className="space-y-4 xl:space-y-6">
-            {trades.length === 0 ? (
+          <div className="space-y-4 xl:space-y-6" key={`${sortBy}-${sortOrder}`}>
+            {sortedTrades.length === 0 ? (
               <div className="text-center py-10 text-gray-400">
                 <p className="text-sm">No completed trades</p>
                 <p className="text-xs mt-1">Trade history will appear here</p>
               </div>
             ) : (
-              trades.map((trade) => (
+              sortedTrades.map((trade) => (
                 <div key={trade.id} className="bg-gray-50/50 border-b border-gray-300 pb-4 xl:pb-5 mb-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1 sm:gap-0">
                     <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
@@ -360,15 +498,27 @@ export default function TradesDashboard({
                     <span className="text-[10px] sm:text-xs text-gray-400">{trade.date}</span>
                   </div>
                   <div className="ml-0 sm:ml-6 space-y-1 text-[10px] sm:text-xs xl:text-sm text-gray-600">
-                    <p>Price: {formatAmount(trade.priceFrom)} → {formatAmount(trade.priceTo)}</p>
-                    <p>Qty: {trade.quantity} | Notional: {formatAmount(trade.notionalFrom)} → {formatAmount(trade.notionalTo)}</p>
-                    <p>Holding time: {trade.holdingTime}</p>
+                    <p>Entry: {formatAmount(trade.priceFrom)} → Exit: {formatAmount(trade.priceTo)}</p>
+                    <p>Qty: {trade.quantity} ({formatAmount(trade.notionalTo)})</p>
+                    <p>Holding time: {trade.holdingTime !== '-' ? trade.holdingTime : '< 1m'}</p>
                   </div>
-                  <div className="ml-0 sm:ml-6 mt-2">
-                    <span className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700">NET P&L: </span>
-                    <span className={`text-[10px] sm:text-xs xl:text-sm font-bold ${trade.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      {trade.pnl >= 0 ? '+' : ''}{formatAmount(trade.pnl)}
-                    </span>
+                  <div className="ml-0 sm:ml-6 mt-2 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700">NET P&L: </span>
+                      <span className={`text-[10px] sm:text-xs xl:text-sm font-bold ${trade.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        {trade.pnl >= 0 ? '+' : ''}{formatAmount(trade.pnl)}
+                      </span>
+                    </div>
+                    {trade.hash && (
+                      <a
+                        href={`https://app.hyperliquid-testnet.xyz/explorer/tx/${trade.hash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[9px] sm:text-[10px] text-gray-400 hover:text-gray-600 hover:underline"
+                      >
+                        View Transaction
+                      </a>
+                    )}
                   </div>
                 </div>
               ))

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import type { RiskProfile } from './RiskProfileSelector';
 
 interface AgentControllerProps {
@@ -66,6 +67,47 @@ export default function AgentController({
   onCloseAllPositions,
   isClosingPositions = false,
 }: AgentControllerProps) {
+
+  const [isStarting, setIsStarting] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
+  const [isPausing, setIsPausing] = useState(false);
+  const [isResuming, setIsResuming] = useState(false);
+
+  // Reset states when agent status changes
+  useEffect(() => {
+    if (isRunning) {
+      setIsStarting(false);
+      setIsResuming(false);
+    }
+    if (!isRunning) {
+      setIsStopping(false);
+    }
+  }, [isRunning]);
+
+  useEffect(() => {
+    if (isPaused) setIsPausing(false);
+    if (!isPaused) setIsResuming(false);
+  }, [isPaused]);
+
+  const handleStart = () => {
+    setIsStarting(true);
+    onStartAgent();
+  };
+
+  const handleStop = () => {
+    setIsStopping(true);
+    onStopAgent();
+  };
+
+  const handlePause = () => {
+    setIsPausing(true);
+    onPauseAgent?.();
+  };
+
+  const handleResume = () => {
+    setIsResuming(true);
+    onResumeAgent?.();
+  };
 
   const toggleAsset = (symbol: string) => {
     if (isRunning) return;
@@ -189,56 +231,111 @@ export default function AgentController({
         <div className="flex gap-3 mt-4">
           {/* Pause/Resume Button */}
           <button
-            onClick={isPaused ? onResumeAgent : onPauseAgent}
+            onClick={isPaused ? handleResume : handlePause}
+            disabled={isPausing || isResuming}
             className={`flex-1 py-3 xl:py-4 rounded-xl font-semibold text-sm xl:text-base transition-all ${
-              isPaused
-                ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg hover:shadow-xl'
-                : 'bg-amber-500 hover:bg-amber-600 text-white'
+              isPausing || isResuming
+                ? 'bg-gradient-to-r from-gray-400 to-gray-500 cursor-not-allowed text-white'
+                : isPaused
+                  ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg hover:shadow-xl'
+                  : 'bg-amber-500 hover:bg-amber-600 text-white'
             }`}
           >
-            {isPaused ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Resume Agent
-              </span>
-            ) : (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Pause Agent
-              </span>
-            )}
+            <span className="flex items-center justify-center gap-2">
+              {isPausing ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Pausing Agent...
+                </>
+              ) : isResuming ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Resuming Agent...
+                </>
+              ) : isPaused ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Resume Agent
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Pause Agent
+                </>
+              )}
+            </span>
           </button>
 
           {/* Stop Button */}
           <button
-            onClick={onStopAgent}
-            className="flex-1 py-3 xl:py-4 rounded-xl font-semibold text-sm xl:text-base transition-all bg-red-500 hover:bg-red-600 text-white"
+            onClick={handleStop}
+            disabled={isStopping}
+            className={`flex-1 py-3 xl:py-4 rounded-xl font-semibold text-sm xl:text-base transition-all text-white ${
+              isStopping
+                ? 'bg-gradient-to-r from-gray-400 to-gray-500 cursor-not-allowed'
+                : 'bg-red-500 hover:bg-red-600'
+            }`}
           >
             <span className="flex items-center justify-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-              </svg>
-              Stop Agent
+              {isStopping ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Stopping Agent...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                  </svg>
+                  Stop Agent
+                </>
+              )}
             </span>
           </button>
         </div>
       ) : (
         <button
-          onClick={onStartAgent}
-          className="w-full mt-4 py-3 xl:py-4 rounded-xl font-semibold text-sm xl:text-base transition-all bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-lg hover:shadow-xl"
+          onClick={handleStart}
+          disabled={isStarting}
+          className={`w-full mt-4 py-3 xl:py-4 rounded-xl font-semibold text-sm xl:text-base transition-all text-white shadow-lg hover:shadow-xl ${
+            isStarting
+              ? 'bg-gradient-to-r from-gray-400 to-gray-500 cursor-not-allowed'
+              : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700'
+          }`}
         >
           <span className="flex items-center justify-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Start Agent
+            {isStarting ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Starting Agent...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Start Agent
+              </>
+            )}
           </span>
         </button>
       )}

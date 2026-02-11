@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useCurrency } from '@/context/CurrencyContext';
 import { useTimezone } from '@/context/TimezoneContext';
 
-const TABS = ['AGENT CHAT', 'POSITIONS', 'COMPLETED TRADES'];
+const TABS = ['AGENT CHAT', 'POSITIONS', 'OPEN ORDERS', 'COMPLETED TRADES'];
 
 export interface Trade {
   id: number | string;
@@ -42,6 +42,20 @@ export interface AgentMessage {
   asset?: string;
 }
 
+export interface OpenOrder {
+  coin: string;
+  side: string;
+  limitPx: string;
+  sz: string;
+  origSz: string;
+  orderType: string;
+  timestamp: number;
+  reduceOnly: boolean;
+  triggerCondition: string;
+  triggerPx: string;
+  oid: number;
+}
+
 export interface AgentStats {
   totalTrades: number;
   winRate: number;
@@ -49,11 +63,16 @@ export interface AgentStats {
   avgHoldTime: string;
   sharpeRatio?: number;
   maxDrawdown?: number;
+  longs?: number;
+  shorts?: number;
+  longVolume?: number;
+  shortVolume?: number;
 }
 
 interface TradesDashboardProps {
   trades?: Trade[];
   positions?: Position[];
+  openOrders?: OpenOrder[];
   messages?: AgentMessage[];
   isAgentRunning?: boolean;
   onClearMessages?: () => void;
@@ -63,6 +82,7 @@ interface TradesDashboardProps {
 export default function TradesDashboard({
   trades = [],
   positions = [],
+  openOrders = [],
   messages,
   isAgentRunning = false,
   onClearMessages,
@@ -307,6 +327,7 @@ export default function TradesDashboard({
               <span className="text-xs xl:text-sm 2xl:text-base text-gray-500">
                 {activeTab === 'COMPLETED TRADES' && `${sortedTrades.length} Trades`}
                 {activeTab === 'POSITIONS' && `${positions.length} Open Positions`}
+                {activeTab === 'OPEN ORDERS' && `${openOrders.length} Open Orders`}
               </span>
               {activeTab === 'COMPLETED TRADES' && sortedTrades.length > 0 && (
                 <div className="relative">
@@ -474,6 +495,64 @@ export default function TradesDashboard({
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {/* OPEN ORDERS */}
+        {activeTab === 'OPEN ORDERS' && (
+          <div className="space-y-4 xl:space-y-6">
+            {openOrders.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">
+                <p className="text-sm">No open orders</p>
+                <p className="text-xs mt-1">Open orders will appear here</p>
+              </div>
+            ) : (
+              openOrders.map((order) => {
+                const isBuy = order.side === 'B';
+                const price = parseFloat(order.limitPx);
+                const size = parseFloat(order.sz);
+                const origSize = parseFloat(order.origSz);
+                const orderValue = price * origSize;
+                const filledSize = origSize - size;
+                const hasTrigger = order.triggerCondition !== 'N/A' && order.triggerPx !== '0.0';
+
+                return (
+                  <div key={order.oid} className="bg-gray-50/50 border-b border-gray-300 pb-4 xl:pb-5 mb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1 sm:gap-0">
+                      <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                        <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded font-medium ${
+                          isBuy ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {isBuy ? 'BUY' : 'SELL'}
+                        </span>
+                        <span className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-900">{order.coin}</span>
+                        <span className="text-[10px] sm:text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                          {order.orderType}
+                        </span>
+                        {order.reduceOnly && (
+                          <span className="text-[10px] sm:text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                            Reduce Only
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] sm:text-xs text-gray-400">
+                        {new Date(order.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="ml-0 sm:ml-6 space-y-1 text-[10px] sm:text-xs xl:text-sm text-gray-600">
+                      <p>Price: {formatAmount(price)}</p>
+                      <p>Size: {size} / {origSize} {order.coin} ({formatAmount(orderValue)})</p>
+                      {filledSize > 0 && (
+                        <p className="text-blue-600">Filled: {filledSize} {order.coin}</p>
+                      )}
+                      {hasTrigger && (
+                        <p>Trigger: {order.triggerCondition} @ {formatAmount(parseFloat(order.triggerPx))}</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         )}

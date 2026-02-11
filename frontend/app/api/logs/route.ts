@@ -8,7 +8,7 @@ import { getFullSession } from '@/lib/session';
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
 // Fetch total PnL (account value - deposits) from Hyperliquid - matches their UI calculation
-async function fetchTotalPnL(publicKey: string): Promise<number> {
+async function fetchTotalPnL(publicKey: string): Promise<number | null> {
   const network = process.env.HYPERLIQUID_NETWORK || 'mainnet';
   const apiBase = network === 'testnet'
     ? 'https://api.hyperliquid-testnet.xyz'
@@ -22,7 +22,14 @@ async function fetchTotalPnL(publicKey: string): Promise<number> {
       body: JSON.stringify({ type: 'clearinghouseState', user: publicKey }),
     });
     const state = await stateRes.json();
-    const accountValue = parseFloat(state?.marginSummary?.accountValue || '0');
+
+    // Validate that marginSummary exists - if not, API returned bad data
+    if (!state?.marginSummary?.accountValue) {
+      console.error('fetchTotalPnL: marginSummary missing or accountValue empty');
+      return null;
+    }
+
+    const accountValue = parseFloat(state.marginSummary.accountValue);
 
     // Get deposits/withdrawals
     const ledgerRes = await fetch(`${apiBase}/info`, {
@@ -54,7 +61,68 @@ async function fetchTotalPnL(publicKey: string): Promise<number> {
     return accountValue - netDeposits;
   } catch (error) {
     console.error('Failed to fetch total PnL:', error);
-    return 0;
+    return null;
+  }
+}
+
+// Fetch open orders from Hyperliquid
+async function fetchOpenOrders(publicKey: string): Promise<Array<{
+  coin: string;
+  side: string;
+  limitPx: string;
+  sz: string;
+  origSz: string;
+  orderType: string;
+  timestamp: number;
+  reduceOnly: boolean;
+  triggerCondition: string;
+  triggerPx: string;
+  oid: number;
+}>> {
+  const network = process.env.HYPERLIQUID_NETWORK || 'mainnet';
+  const apiBase = network === 'testnet'
+    ? 'https://api.hyperliquid-testnet.xyz'
+    : 'https://api.hyperliquid.xyz';
+
+  try {
+    const response = await fetch(`${apiBase}/info`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'frontendOpenOrders', user: publicKey }),
+    });
+
+    if (!response.ok) return [];
+    const orders = await response.json();
+    if (!Array.isArray(orders)) return [];
+
+    return orders.map((order: {
+      coin: string;
+      side: string;
+      limitPx: string;
+      sz: string;
+      origSz: string;
+      orderType: string;
+      timestamp: number;
+      reduceOnly: boolean;
+      triggerCondition: string;
+      triggerPx: string;
+      oid: number;
+    }) => ({
+      coin: order.coin,
+      side: order.side,
+      limitPx: order.limitPx,
+      sz: order.sz,
+      origSz: order.origSz,
+      orderType: order.orderType || 'Limit',
+      timestamp: order.timestamp,
+      reduceOnly: order.reduceOnly || false,
+      triggerCondition: order.triggerCondition || 'N/A',
+      triggerPx: order.triggerPx || '0.0',
+      oid: order.oid,
+    }));
+  } catch (error) {
+    console.error('Failed to fetch open orders:', error);
+    return [];
   }
 }
 
@@ -339,6 +407,10 @@ interface AgentStats {
   holdDecisions: number;
   buyDecisions: number;
   sellDecisions: number;
+  longs: number;
+  shorts: number;
+  longVolume: number;
+  shortVolume: number;
 }
 
 // Parse prompts.log to extract market data context
@@ -507,7 +579,8 @@ export async function GET(request: Request) {
     // Fetch logs from backend if session exists
     let backendLogs: string[] = [];
     let hyperliquidFills: Awaited<ReturnType<typeof fetchHyperliquidFills>> = [];
-    let totalPnLFromHyperliquid = 0;
+    let openOrders: Awaited<ReturnType<typeof fetchOpenOrders>> = [];
+    let totalPnLFromHyperliquid: number | null = null;
     if (session) {
       try {
         const logsResponse = await fetch(`${BACKEND_URL}/logs/${session.publicKey}?limit=${limit}`);
@@ -531,6 +604,13 @@ export async function GET(request: Request) {
         totalPnLFromHyperliquid = await fetchTotalPnL(session.publicKey);
       } catch (err) {
         console.error('Failed to fetch total PnL:', err);
+      }
+
+      // Fetch open orders from Hyperliquid
+      try {
+        openOrders = await fetchOpenOrders(session.publicKey);
+      } catch (err) {
+        console.error('Failed to fetch open orders:', err);
       }
     }
 
@@ -937,31 +1017,45 @@ export async function GET(request: Request) {
     // Use Hyperliquid fills if available, otherwise fall back to diary-based trades
     const finalCompletedTrades = displayTrades.length > 0 ? displayTrades : completedTrades.reverse();
 
-    // For stats, use closing fills (trades with actual P&L) for accurate win rate
-    const allClosingFills = allFillBasedTrades.filter(t =>
-      t.dir?.toLowerCase().includes('close') || t.pnl !== 0
-    );
-    const tradesWithPnL = allClosingFills.length > 0 ? allClosingFills : completedTrades;
+    // Only compute stats from Hyperliquid fills (accurate source)
+    // If no Hyperliquid fills, return null so client keeps last good stats
+    let finalStats: AgentStats | null = null;
 
-    // Calculate stats - win rate from closing trades only
-    // Use Hyperliquid's total PnL (account value - deposits) which matches their UI
-    const finalStats: AgentStats = {
-      totalTrades: allFillBasedTrades.length || completedTrades.length,
-      winRate: tradesWithPnL.length > 0
-        ? (tradesWithPnL.filter(t => t.pnl > 0).length / tradesWithPnL.length) * 100
-        : 0,
-      totalPnl: totalPnLFromHyperliquid || tradesWithPnL.reduce((sum, t) => sum + (t.pnl || 0), 0),
-      avgHoldTime: calculateAvgHoldTime(),
-      holdDecisions: holdEntries.length,
-      buyDecisions: allFillBasedTrades.filter(t => t.action?.toLowerCase().includes('buy') || t.action?.toLowerCase().includes('long')).length,
-      sellDecisions: allFillBasedTrades.filter(t => t.action?.toLowerCase().includes('sell') || t.action?.toLowerCase().includes('short')).length,
-    };
+    if (allFillBasedTrades.length > 0 && totalPnLFromHyperliquid !== null) {
+      const allClosingFills = allFillBasedTrades.filter(t =>
+        t.dir?.toLowerCase().includes('close') || t.pnl !== 0
+      );
+
+      const allLongFills = allFillBasedTrades.filter(t =>
+        t.action?.toUpperCase().includes('LONG') || t.action?.toUpperCase() === 'BUY'
+      );
+      const allShortFills = allFillBasedTrades.filter(t =>
+        t.action?.toUpperCase().includes('SHORT') || t.action?.toUpperCase() === 'SELL'
+      );
+
+      finalStats = {
+        totalTrades: allFillBasedTrades.length,
+        winRate: allClosingFills.length > 0
+          ? (allClosingFills.filter(t => t.pnl > 0).length / allClosingFills.length) * 100
+          : 0,
+        totalPnl: totalPnLFromHyperliquid,
+        avgHoldTime: calculateAvgHoldTime(),
+        holdDecisions: holdEntries.length,
+        buyDecisions: allLongFills.length,
+        sellDecisions: allShortFills.length,
+        longs: allLongFills.length,
+        shorts: allShortFills.length,
+        longVolume: allLongFills.reduce((sum, t) => sum + (t.notionalFrom || 0), 0),
+        shortVolume: allShortFills.reduce((sum, t) => sum + (t.notionalFrom || 0), 0),
+      };
+    }
 
     return NextResponse.json({
       entries: recentEntries,
       enrichedMessages,
       completedTrades: finalCompletedTrades,
       positions: livePositions,
+      openOrders,
       stats: finalStats,
       accountState,
       backendLogs,

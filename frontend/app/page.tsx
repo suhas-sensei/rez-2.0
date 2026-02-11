@@ -1,7 +1,7 @@
 'use client';
 
 import TradesDashboard from '@/components/TradesDashboard';
-import type { Position, AgentMessage, Trade, AgentStats } from '@/components/TradesDashboard';
+import type { Position, AgentMessage, Trade, AgentStats, OpenOrder } from '@/components/TradesDashboard';
 import LiveChart from '@/components/LiveChart';
 import BalanceChart from '@/components/BalanceChart';
 import AgentStatsCircles from '@/components/AgentStatsCircles';
@@ -68,7 +68,14 @@ function HomeContent() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [stats, setStats] = useState<AgentStats | undefined>(undefined);
+  const [openOrders, setOpenOrders] = useState<OpenOrder[]>([]);
+  const [stats, setStats] = useState<AgentStats | undefined>(() => {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('rez_cached_stats');
+      if (cached) try { return JSON.parse(cached); } catch { /* ignore */ }
+    }
+    return undefined;
+  });
   const [isClosingPositions, setIsClosingPositions] = useState(false);
   const [accountState, setAccountState] = useState<{
     balance: number;
@@ -212,8 +219,21 @@ function HomeContent() {
         if (data.positions && Array.isArray(data.positions)) {
           setPositions(data.positions);
         }
+        // Update open orders
+        if (data.openOrders && Array.isArray(data.openOrders)) {
+          setOpenOrders(data.openOrders);
+        }
         if (data.stats) {
-          setStats(data.stats);
+          setStats(prev => {
+            // If new totalPnl is 0 but we had a real value, preserve the old totalPnl
+            if (data.stats.totalPnl === 0 && prev?.totalPnl && prev.totalPnl !== 0) {
+              const merged = { ...data.stats, totalPnl: prev.totalPnl };
+              localStorage.setItem('rez_cached_stats', JSON.stringify(merged));
+              return merged;
+            }
+            localStorage.setItem('rez_cached_stats', JSON.stringify(data.stats));
+            return data.stats;
+          });
         }
         if (data.accountState) {
           const unrealizedPnl = data.accountState.unrealizedPnl ?? 0;
@@ -604,6 +624,7 @@ function HomeContent() {
         >
           <TradesDashboard
             positions={positions}
+            openOrders={openOrders}
             messages={messages}
             trades={trades}
             isAgentRunning={isAgentRunning}

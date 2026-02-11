@@ -8,6 +8,10 @@ interface AgentStatsCirclesProps {
     winRate: number;
     totalPnl: number;
     avgHoldTime: string;
+    longs?: number;
+    shorts?: number;
+    longVolume?: number;
+    shortVolume?: number;
   };
   trades?: {
     id: number | string;
@@ -70,7 +74,7 @@ function formatLargeNumber(num: number): string {
   if (num >= 1e9) return `${(num / 1e9).toFixed(2)}B`;
   if (num >= 1e6) return `${(num / 1e6).toFixed(2)}M`;
   if (num >= 1e3) return `${(num / 1e3).toFixed(1)}K`;
-  return num.toLocaleString();
+  return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function AgentStatsCircles({ stats, trades = [] }: AgentStatsCirclesProps) {
@@ -85,23 +89,14 @@ export default function AgentStatsCircles({ stats, trades = [] }: AgentStatsCirc
     return `${currencySymbol}${converted.toFixed(2)}`;
   };
 
-  // Calculate stats from trades and positions
-  const totalTransactions = stats?.totalTrades ?? trades.length;
-
-  // Count longs and shorts from trades
-  const longs = trades.filter(t => t.action?.toUpperCase().includes('LONG') || t.action?.toUpperCase() === 'BUY').length;
-  const shorts = trades.filter(t => t.action?.toUpperCase().includes('SHORT') || t.action?.toUpperCase() === 'SELL').length;
-
-  // Calculate volumes
-  const longVolume = trades
-    .filter(t => t.action?.toUpperCase().includes('LONG') || t.action?.toUpperCase() === 'BUY')
-    .reduce((sum, t) => sum + (t.notionalFrom || 0), 0);
-  const shortVolume = trades
-    .filter(t => t.action?.toUpperCase().includes('SHORT') || t.action?.toUpperCase() === 'SELL')
-    .reduce((sum, t) => sum + (t.notionalFrom || 0), 0);
-
-  // Get stats
-  const totalPnl = stats?.totalPnl ?? trades.reduce((sum, t) => sum + (t.pnl || 0), 0);
+  // If no stats available yet, don't compute from empty trades (would show wrong zeros)
+  const hasData = !!stats;
+  const totalTransactions = stats?.totalTrades ?? 0;
+  const longs = stats?.longs ?? 0;
+  const shorts = stats?.shorts ?? 0;
+  const longVolume = stats?.longVolume ?? 0;
+  const shortVolume = stats?.shortVolume ?? 0;
+  const totalPnl = stats?.totalPnl ?? 0;
   const winRate = stats?.winRate ?? 0;
 
   // Calculate PnL percentage
@@ -133,7 +128,7 @@ export default function AgentStatsCircles({ stats, trades = [] }: AgentStatsCirc
             <div className="text-gray-500 text-base font-medium mb-2">Transactions</div>
             <div className="flex items-center gap-4">
               <span className="text-5xl font-bold text-gray-900">
-                {formatLargeNumber(totalTransactions)}
+                {hasData ? formatLargeNumber(totalTransactions) : '—'}
               </span>
               <span className={`px-3 py-1.5 rounded text-base font-semibold ${
                 pnlPercentage >= 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
@@ -150,11 +145,11 @@ export default function AgentStatsCircles({ stats, trades = [] }: AgentStatsCirc
             <div className="flex gap-4">
               <div className="w-24">
                 <div className="text-green-500 text-sm font-medium">LONGS</div>
-                <div className="text-green-600 text-xl font-bold">{formatLargeNumber(longs)}</div>
+                <div className="text-green-600 text-xl font-bold">{hasData ? formatLargeNumber(longs) : '—'}</div>
               </div>
               <div className="w-24">
                 <div className="text-red-500 text-sm font-medium">SHORTS</div>
-                <div className="text-red-600 text-xl font-bold">{formatLargeNumber(shorts)}</div>
+                <div className="text-red-600 text-xl font-bold">{hasData ? formatLargeNumber(shorts) : '—'}</div>
               </div>
             </div>
 
@@ -162,11 +157,11 @@ export default function AgentStatsCircles({ stats, trades = [] }: AgentStatsCirc
             <div className="flex gap-4">
               <div className="w-24">
                 <div className="text-green-500 text-sm font-medium">LONG VOL</div>
-                <div className="text-green-600 text-xl font-bold">{formatCurrency(longVolume)}</div>
+                <div className="text-green-600 text-xl font-bold">{hasData ? formatCurrency(longVolume) : '—'}</div>
               </div>
               <div className="w-24">
                 <div className="text-red-500 text-sm font-medium">SHORT VOL</div>
-                <div className="text-red-600 text-xl font-bold">{formatCurrency(shortVolume)}</div>
+                <div className="text-red-600 text-xl font-bold">{hasData ? formatCurrency(shortVolume) : '—'}</div>
               </div>
             </div>
           </div>
@@ -190,7 +185,7 @@ export default function AgentStatsCircles({ stats, trades = [] }: AgentStatsCirc
             <div className="flex flex-col">
               <div className="text-gray-500 text-sm font-medium mb-1">Win Rate</div>
               <div className="text-[2.75rem] font-bold text-gray-900">
-                {winRate.toFixed(1)}%
+                {hasData ? `${winRate.toFixed(1)}%` : '—'}
               </div>
             </div>
 
@@ -198,7 +193,7 @@ export default function AgentStatsCircles({ stats, trades = [] }: AgentStatsCirc
             <div className="flex flex-col">
               <div className="text-gray-500 text-sm font-medium mb-1">Total P&L</div>
               <div className={`text-[2.75rem] font-bold ${totalPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {totalPnl >= 0 ? '+' : ''}{currencySymbol}{formatLargeNumber(convertAmount(Math.abs(totalPnl)))}
+                {hasData ? `${totalPnl >= 0 ? '+' : ''}${currencySymbol}${formatLargeNumber(convertAmount(Math.abs(totalPnl)))}` : '—'}
               </div>
             </div>
           </div>

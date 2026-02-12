@@ -65,7 +65,7 @@ export default function PortfolioHeader({
   const pnlPercent = accountState?.totalReturnPct ?? 0;
 
   return (
-    <div className="bg-white px-2.5 min-[330px]:px-4 min-[1386px]:px-8 py-3 min-[330px]:py-4 min-[1386px]:py-5 font-inter border-b border-gray-100">
+    <div className="bg-white px-2.5 min-[330px]:px-4 min-[1386px]:px-8 py-2 min-[365px]:py-2.5 min-[570px]:py-4 min-[1386px]:py-5 font-inter border-b border-gray-100">
       <div className="flex items-center justify-between">
         {/* Left side - Title */}
         <div className="shrink-0">

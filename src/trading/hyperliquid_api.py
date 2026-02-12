@@ -71,7 +71,11 @@ class HyperliquidAPI:
     def _build_clients(self):
         """Instantiate exchange and info client instances for the active base URL."""
         self.info = Info(self.base_url)
-        self.exchange = Exchange(self.wallet, self.base_url)
+        self.exchange = Exchange(
+            self.wallet,
+            self.base_url,
+            account_address=self.account_address if self.account_address != self.wallet.address else None,
+        )
 
     def _reset_clients(self):
         """Recreate SDK clients after connection failures while logging failures."""

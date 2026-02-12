@@ -201,7 +201,20 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
         log("Initializing indicators...")
         taapi = LocalIndicatorCalculator()
         log("Initializing Hyperliquid API...")
-        hyperliquid = HyperliquidAPI()
+        # Retry initialization in case of rate limiting (429)
+        import time as _time
+        hyperliquid = None
+        for _attempt in range(5):
+            try:
+                hyperliquid = HyperliquidAPI()
+                break
+            except Exception as init_err:
+                if '429' in str(init_err) and _attempt < 4:
+                    wait = 3 * (2 ** _attempt)
+                    log(f"Rate limited on init (attempt {_attempt + 1}/5), retrying in {wait}s...")
+                    _time.sleep(wait)
+                else:
+                    raise
         log("Initializing trading agent...")
         agent = TradingAgent(risk_profile=config.risk_profile)
     except Exception as e:
@@ -263,190 +276,338 @@ def run_agent_process(config: AgentConfig, log_file_path: str):
                             "unrealized_pnl": round_or_none(pos.get('pnl'), 4),
                         })
 
-                # Gather market data for all assets
-                market_sections = []
-                asset_prices = {}
+                # Debug mode: LLM decides, trade executes, wait 30s, close all, repeat
+                if config.risk_profile == "debug":
+                    import random
 
-                for asset in config.assets:
-                    try:
-                        current_price = await hyperliquid.get_current_price(asset)
-                        asset_prices[asset] = current_price
+                    # Gather prices for all assets
+                    market_sections = []
+                    asset_prices = {}
+                    for asset in config.assets:
+                        try:
+                            current_price = await hyperliquid.get_current_price(asset)
+                            asset_prices[asset] = current_price
 
-                        if asset not in price_history:
-                            price_history[asset] = deque(maxlen=60)
-                        price_history[asset].append({"t": datetime.now(timezone.utc).isoformat(), "mid": round_or_none(current_price, 2)})
+                            if asset not in price_history:
+                                price_history[asset] = deque(maxlen=60)
+                            price_history[asset].append({"t": datetime.now(timezone.utc).isoformat(), "mid": round_or_none(current_price, 2)})
 
-                        oi = await hyperliquid.get_open_interest(asset)
-                        funding = await hyperliquid.get_funding_rate(asset)
+                            oi = await hyperliquid.get_open_interest(asset)
+                            funding = await hyperliquid.get_funding_rate(asset)
 
-                        intraday_tf = "5m"
-                        ema_series = taapi.fetch_series("ema", f"{asset}/USDT", intraday_tf, results=10, params={"period": 20}, value_key="value")
-                        macd_series = taapi.fetch_series("macd", f"{asset}/USDT", intraday_tf, results=10, value_key="valueMACD")
-                        rsi7_series = taapi.fetch_series("rsi", f"{asset}/USDT", intraday_tf, results=10, params={"period": 7}, value_key="value")
-                        rsi14_series = taapi.fetch_series("rsi", f"{asset}/USDT", intraday_tf, results=10, params={"period": 14}, value_key="value")
+                            intraday_tf = "5m"
+                            ema_series = taapi.fetch_series("ema", f"{asset}/USDT", intraday_tf, results=10, params={"period": 20}, value_key="value")
+                            rsi14_series = taapi.fetch_series("rsi", f"{asset}/USDT", intraday_tf, results=10, params={"period": 14}, value_key="value")
 
-                        lt_ema20 = taapi.fetch_value("ema", f"{asset}/USDT", "4h", params={"period": 20}, key="value")
-                        lt_ema50 = taapi.fetch_value("ema", f"{asset}/USDT", "4h", params={"period": 50}, key="value")
-                        lt_atr14 = taapi.fetch_value("atr", f"{asset}/USDT", "4h", params={"period": 14}, key="value")
+                            funding_annualized = round(funding * 24 * 365 * 100, 2) if funding else None
+                            market_sections.append({
+                                "asset": asset,
+                                "current_price": round_or_none(current_price, 2),
+                                "intraday": {
+                                    "ema20": round_or_none(ema_series[-1], 2) if ema_series else None,
+                                    "rsi14": round_or_none(rsi14_series[-1], 2) if rsi14_series else None,
+                                },
+                                "funding_annualized_pct": funding_annualized,
+                            })
 
-                        funding_annualized = round(funding * 24 * 365 * 100, 2) if funding else None
+                            rsi_val = f"{rsi14_series[-1]:.1f}" if rsi14_series else "N/A"
+                            log(f"{asset}: ${current_price:.2f} | RSI14: {rsi_val}")
+                        except Exception as e:
+                            log(f"Data gather error {asset}: {e}")
+                            if asset not in asset_prices:
+                                try:
+                                    asset_prices[asset] = await hyperliquid.get_current_price(asset)
+                                except Exception:
+                                    pass
 
-                        market_sections.append({
-                            "asset": asset,
-                            "current_price": round_or_none(current_price, 2),
-                            "intraday": {
-                                "ema20": round_or_none(ema_series[-1], 2) if ema_series else None,
-                                "macd": round_or_none(macd_series[-1], 2) if macd_series else None,
-                                "rsi7": round_or_none(rsi7_series[-1], 2) if rsi7_series else None,
-                                "rsi14": round_or_none(rsi14_series[-1], 2) if rsi14_series else None,
-                            },
-                            "long_term": {
-                                "ema20": round_or_none(lt_ema20, 2),
-                                "ema50": round_or_none(lt_ema50, 2),
-                                "atr14": round_or_none(lt_atr14, 2),
-                            },
-                            "funding_annualized_pct": funding_annualized,
-                        })
+                    # Call LLM for decisions
+                    dashboard = {
+                        "total_return_pct": round(total_return_pct, 2),
+                        "balance": round_or_none(state['balance'], 2),
+                        "account_value": round_or_none(total_value, 2),
+                        "positions": positions,
+                    }
+                    context_payload = OrderedDict([
+                        ("invocation", {"minutes_since_start": round(minutes_since_start, 2), "current_time": datetime.now(timezone.utc).isoformat(), "invocation_count": invocation_count}),
+                        ("account", dashboard),
+                        ("market_data", market_sections),
+                        ("instructions", {"assets": config.assets, "requirement": "You MUST buy or sell every asset. No holding. Return a strict JSON array matching the schema."})
+                    ])
+                    context = json.dumps(context_payload, default=json_default)
+                    log(f"Calling LLM with {len(context)} chars context...")
 
-                        rsi_val = f"{rsi14_series[-1]:.1f}" if rsi14_series else "N/A"
-                        log(f"{asset}: ${current_price:.2f} | RSI14: {rsi_val}")
-
-                    except Exception as e:
-                        log(f"Data gather error {asset}: {e}")
-                        continue
-
-                # Build context for LLM
-                dashboard = {
-                    "total_return_pct": round(total_return_pct, 2),
-                    "balance": round_or_none(state['balance'], 2),
-                    "account_value": round_or_none(total_value, 2),
-                    "positions": positions,
-                    "active_trades": active_trades,
-                }
-
-                context_payload = OrderedDict([
-                    ("invocation", {
-                        "minutes_since_start": round(minutes_since_start, 2),
-                        "current_time": datetime.now(timezone.utc).isoformat(),
-                        "invocation_count": invocation_count
-                    }),
-                    ("account", dashboard),
-                    ("market_data", market_sections),
-                    ("instructions", {
-                        "assets": config.assets,
-                        "requirement": "Decide actions for all assets and return a strict JSON array matching the schema."
-                    })
-                ])
-
-                context = json.dumps(context_payload, default=json_default)
-                log(f"Calling LLM with {len(context)} chars context...")
-
-                try:
-                    outputs = agent.decide_trade(config.assets, context)
-                    if not isinstance(outputs, dict):
-                        log(f"Invalid output format: {outputs}")
-                        outputs = {}
-                    else:
-                        # Log the LLM reasoning summary so frontend can display it
-                        summary = outputs.get("summary", "")
-                        if summary:
-                            log(f"LLM reasoning summary: {summary}")
-                except Exception as e:
-                    log(f"Agent error: {e}")
                     outputs = {}
-
-                # Execute trades
-                for output in outputs.get("trade_decisions", []) if isinstance(outputs, dict) else []:
                     try:
-                        asset = output.get("asset")
-                        if not asset or asset not in config.assets:
+                        outputs = agent.decide_trade(config.assets, context)
+                        if not isinstance(outputs, dict):
+                            outputs = {}
+                        else:
+                            summary = outputs.get("summary", "")
+                            if summary:
+                                log(f"LLM reasoning summary: {summary}")
+                    except Exception as e:
+                        log(f"Agent error: {e}")
+
+                    # Build decisions map from LLM output
+                    llm_decisions = {}
+                    for output in outputs.get("trade_decisions", []) if isinstance(outputs, dict) else []:
+                        a = output.get("asset")
+                        if a:
+                            llm_decisions[a] = output
+
+                    # Execute trades for ALL selected assets (override hold with random)
+                    for asset in config.assets:
+                        current_price = asset_prices.get(asset, 0)
+                        if current_price <= 0:
                             continue
 
-                        action = output.get("action")
-                        rationale = output.get("rationale", "")
-                        exit_plan = output.get("exit_plan", "")
+                        decision = llm_decisions.get(asset, {})
+                        action = decision.get("action", "hold")
+                        rationale = decision.get("rationale", "")
 
-                        # Log decision rationale for frontend display
+                        # Override hold with random buy/sell in debug
+                        if action not in ("buy", "sell"):
+                            action = random.choice(["buy", "sell"])
+                            rationale = rationale or f"Debug: random {action} (LLM said hold)"
+
                         log(f"Decision rationale for {asset}: {rationale}")
 
-                        if action in ("buy", "sell"):
-                            is_buy = action == "buy"
-                            alloc_usd = float(output.get("allocation_usd", 0.0))
+                        is_buy = action == "buy"
+                        alloc_usd = float(decision.get("allocation_usd", 12.0))
+                        if alloc_usd < 12:
+                            alloc_usd = 12.0
+                        amount = alloc_usd / current_price
 
-                            if alloc_usd < 12:
-                                alloc_usd = 12.0
+                        log(f"Executing {action.upper()} {asset}: ${alloc_usd:.2f} @ ${current_price:.2f}")
 
-                            current_price = asset_prices.get(asset, 0)
-                            amount = alloc_usd / current_price if current_price > 0 else 0
-
-                            tp_price = output.get("tp_price")
-                            sl_price = output.get("sl_price")
-
-                            log(f"Executing {action.upper()} {asset}: ${alloc_usd:.2f} @ ${current_price:.2f} | TP: {tp_price} | SL: {sl_price}")
-
+                        try:
+                            await asyncio.sleep(2)  # Rate limit spacing
                             if is_buy:
                                 order = await hyperliquid.place_buy_order(asset, amount)
                             else:
                                 order = await hyperliquid.place_sell_order(asset, amount)
-
                             log(f"Order result for {asset}: {order}")
 
-                            # Check if order was filled
-                            order_filled = False
-                            fill_price = current_price
-                            fill_size = amount
                             if isinstance(order, dict) and order.get('status') == 'ok':
                                 response = order.get('response', {})
                                 if response.get('type') == 'order':
                                     statuses = response.get('data', {}).get('statuses', [])
                                     if statuses and 'filled' in statuses[0]:
-                                        order_filled = True
                                         fill_price = float(statuses[0]['filled'].get('avgPx', current_price))
                                         fill_size = float(statuses[0]['filled'].get('totalSz', amount))
+                                        write_trade({
+                                            "asset": asset, "action": action,
+                                            "side": "LONG" if is_buy else "SHORT",
+                                            "amount": fill_size, "entry_price": fill_price,
+                                            "allocation_usd": alloc_usd,
+                                            "notional": fill_price * fill_size,
+                                            "rationale": rationale,
+                                            "order_result": str(order), "filled": True,
+                                        })
+                        except Exception as e:
+                            log(f"Execution error {asset}: {e}")
+                            await asyncio.sleep(3)
 
-                            # Write trade to diary for stats
-                            if order_filled:
-                                write_trade({
+                    # Wait 30 seconds then close all positions
+                    log("Debug mode: holding positions for 30 seconds...")
+                    await asyncio.sleep(30)
+
+                    log("Debug mode: closing all positions...")
+                    try:
+                        close_state = await hyperliquid.get_user_state()
+                        for pos in close_state.get('positions', []):
+                            coin = pos.get('coin')
+                            szi = float(pos.get('szi', 0) or 0)
+                            if coin and szi != 0:
+                                await asyncio.sleep(2)
+                                try:
+                                    close_buy = szi < 0  # Short → buy to close, Long → sell to close
+                                    result = await hyperliquid._retry(
+                                        lambda c=coin, b=close_buy, s=abs(szi): hyperliquid.exchange.market_open(c, b, s, None, 0.15)
+                                    )
+                                    log(f"Closed {coin}: {result}")
+                                except Exception as ce:
+                                    log(f"Close error {coin}: {ce}")
+                    except Exception as e:
+                        log(f"Close all error: {e}")
+
+                    log("Debug mode: sleeping 10 seconds before next cycle...")
+                    await asyncio.sleep(10)
+
+                else:
+                    # Normal mode: gather indicators + LLM
+                    market_sections = []
+                    asset_prices = {}
+
+                    for asset in config.assets:
+                        try:
+                            current_price = await hyperliquid.get_current_price(asset)
+                            asset_prices[asset] = current_price
+
+                            if asset not in price_history:
+                                price_history[asset] = deque(maxlen=60)
+                            price_history[asset].append({"t": datetime.now(timezone.utc).isoformat(), "mid": round_or_none(current_price, 2)})
+
+                            oi = await hyperliquid.get_open_interest(asset)
+                            funding = await hyperliquid.get_funding_rate(asset)
+
+                            intraday_tf = "5m"
+                            ema_series = taapi.fetch_series("ema", f"{asset}/USDT", intraday_tf, results=10, params={"period": 20}, value_key="value")
+                            macd_series = taapi.fetch_series("macd", f"{asset}/USDT", intraday_tf, results=10, value_key="valueMACD")
+                            rsi7_series = taapi.fetch_series("rsi", f"{asset}/USDT", intraday_tf, results=10, params={"period": 7}, value_key="value")
+                            rsi14_series = taapi.fetch_series("rsi", f"{asset}/USDT", intraday_tf, results=10, params={"period": 14}, value_key="value")
+
+                            lt_ema20 = taapi.fetch_value("ema", f"{asset}/USDT", "4h", params={"period": 20}, key="value")
+                            lt_ema50 = taapi.fetch_value("ema", f"{asset}/USDT", "4h", params={"period": 50}, key="value")
+                            lt_atr14 = taapi.fetch_value("atr", f"{asset}/USDT", "4h", params={"period": 14}, key="value")
+
+                            funding_annualized = round(funding * 24 * 365 * 100, 2) if funding else None
+
+                            market_sections.append({
+                                "asset": asset,
+                                "current_price": round_or_none(current_price, 2),
+                                "intraday": {
+                                    "ema20": round_or_none(ema_series[-1], 2) if ema_series else None,
+                                    "macd": round_or_none(macd_series[-1], 2) if macd_series else None,
+                                    "rsi7": round_or_none(rsi7_series[-1], 2) if rsi7_series else None,
+                                    "rsi14": round_or_none(rsi14_series[-1], 2) if rsi14_series else None,
+                                },
+                                "long_term": {
+                                    "ema20": round_or_none(lt_ema20, 2),
+                                    "ema50": round_or_none(lt_ema50, 2),
+                                    "atr14": round_or_none(lt_atr14, 2),
+                                },
+                                "funding_annualized_pct": funding_annualized,
+                            })
+
+                            rsi_val = f"{rsi14_series[-1]:.1f}" if rsi14_series else "N/A"
+                            log(f"{asset}: ${current_price:.2f} | RSI14: {rsi_val}")
+
+                        except Exception as e:
+                            log(f"Data gather error {asset}: {e}")
+                            continue
+
+                    # Build context for LLM
+                    dashboard = {
+                        "total_return_pct": round(total_return_pct, 2),
+                        "balance": round_or_none(state['balance'], 2),
+                        "account_value": round_or_none(total_value, 2),
+                        "positions": positions,
+                        "active_trades": active_trades,
+                    }
+
+                    context_payload = OrderedDict([
+                        ("invocation", {
+                            "minutes_since_start": round(minutes_since_start, 2),
+                            "current_time": datetime.now(timezone.utc).isoformat(),
+                            "invocation_count": invocation_count
+                        }),
+                        ("account", dashboard),
+                        ("market_data", market_sections),
+                        ("instructions", {
+                            "assets": config.assets,
+                            "requirement": "Decide actions for all assets and return a strict JSON array matching the schema."
+                        })
+                    ])
+
+                    context = json.dumps(context_payload, default=json_default)
+                    log(f"Calling LLM with {len(context)} chars context...")
+
+                    try:
+                        outputs = agent.decide_trade(config.assets, context)
+                        if not isinstance(outputs, dict):
+                            log(f"Invalid output format: {outputs}")
+                            outputs = {}
+                        else:
+                            summary = outputs.get("summary", "")
+                            if summary:
+                                log(f"LLM reasoning summary: {summary}")
+                    except Exception as e:
+                        log(f"Agent error: {e}")
+                        outputs = {}
+
+                    # Execute trades
+                    for output in outputs.get("trade_decisions", []) if isinstance(outputs, dict) else []:
+                        try:
+                            asset = output.get("asset")
+                            if not asset or asset not in config.assets:
+                                continue
+
+                            action = output.get("action")
+                            rationale = output.get("rationale", "")
+
+                            log(f"Decision rationale for {asset}: {rationale}")
+
+                            if action in ("buy", "sell"):
+                                is_buy = action == "buy"
+                                alloc_usd = float(output.get("allocation_usd", 0.0))
+
+                                if alloc_usd < 12:
+                                    alloc_usd = 12.0
+
+                                current_price = asset_prices.get(asset, 0)
+                                amount = alloc_usd / current_price if current_price > 0 else 0
+
+                                tp_price = output.get("tp_price")
+                                sl_price = output.get("sl_price")
+
+                                log(f"Executing {action.upper()} {asset}: ${alloc_usd:.2f} @ ${current_price:.2f} | TP: {tp_price} | SL: {sl_price}")
+
+                                if is_buy:
+                                    order = await hyperliquid.place_buy_order(asset, amount)
+                                else:
+                                    order = await hyperliquid.place_sell_order(asset, amount)
+
+                                log(f"Order result for {asset}: {order}")
+
+                                order_filled = False
+                                fill_price = current_price
+                                fill_size = amount
+                                if isinstance(order, dict) and order.get('status') == 'ok':
+                                    response = order.get('response', {})
+                                    if response.get('type') == 'order':
+                                        statuses = response.get('data', {}).get('statuses', [])
+                                        if statuses and 'filled' in statuses[0]:
+                                            order_filled = True
+                                            fill_price = float(statuses[0]['filled'].get('avgPx', current_price))
+                                            fill_size = float(statuses[0]['filled'].get('totalSz', amount))
+
+                                if order_filled:
+                                    write_trade({
+                                        "asset": asset,
+                                        "action": action,
+                                        "side": "LONG" if is_buy else "SHORT",
+                                        "amount": fill_size,
+                                        "entry_price": fill_price,
+                                        "allocation_usd": alloc_usd,
+                                        "notional": fill_price * fill_size,
+                                        "tp_price": tp_price,
+                                        "sl_price": sl_price,
+                                        "rationale": rationale,
+                                        "order_result": str(order),
+                                        "filled": True,
+                                    })
+
+                                if tp_price:
+                                    await hyperliquid.place_take_profit(asset, is_buy, amount, tp_price)
+                                    log(f"{asset} TP placed at ${tp_price}")
+
+                                if sl_price:
+                                    await hyperliquid.place_stop_loss(asset, is_buy, amount, sl_price)
+                                    log(f"{asset} SL placed at ${sl_price}")
+
+                                trade_log.append({
                                     "asset": asset,
                                     "action": action,
-                                    "side": "LONG" if is_buy else "SHORT",
-                                    "amount": fill_size,
-                                    "entry_price": fill_price,
-                                    "allocation_usd": alloc_usd,
-                                    "notional": fill_price * fill_size,
-                                    "tp_price": tp_price,
-                                    "sl_price": sl_price,
-                                    "rationale": rationale,
-                                    "order_result": str(order),
-                                    "filled": True,
+                                    "amount": amount,
+                                    "price": current_price,
                                 })
+                            else:
+                                log(f"HOLD {asset}: {rationale}")
 
-                            # Place TP/SL if specified
-                            if tp_price:
-                                await hyperliquid.place_take_profit(asset, is_buy, amount, tp_price)
-                                log(f"{asset} TP placed at ${tp_price}")
+                        except Exception as e:
+                            log(f"Execution error {asset}: {e}")
 
-                            if sl_price:
-                                await hyperliquid.place_stop_loss(asset, is_buy, amount, sl_price)
-                                log(f"{asset} SL placed at ${sl_price}")
-
-                            trade_log.append({
-                                "asset": asset,
-                                "action": action,
-                                "amount": amount,
-                                "price": current_price,
-                            })
-                        else:
-                            log(f"HOLD {asset}: {rationale}")
-
-                    except Exception as e:
-                        log(f"Execution error {asset}: {e}")
-
-                # Debug mode: run every 15 seconds for rapid trading
-                if config.risk_profile == "debug":
-                    log("Debug mode: sleeping 15 seconds...")
-                    await asyncio.sleep(15)
-                else:
                     log(f"Sleeping for {config.interval}...")
                     await asyncio.sleep(get_interval_seconds(config.interval))
 

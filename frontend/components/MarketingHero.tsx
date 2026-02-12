@@ -84,9 +84,9 @@ const Hero = ({ onLogin }: HeroProps) => {
                     <p className="marketing-hero-subtitle">
                         Rez is a non-custodial platform that automates perpetual trading using AI agents.
                     </p>
-                    <div className="isolate flex flex-col items-center gap-3 mt-8">
-                        <div className="flex gap-3 items-center">
-                            <div className="relative w-40">
+                    <div className="isolate flex flex-col items-center gap-2 min-[360px]:gap-3 mt-5 min-[360px]:mt-8">
+                        <div className="flex gap-2 min-[360px]:gap-3 items-center">
+                            <div className="relative w-32 min-[360px]:w-40">
                                 <input
                                     type="text"
                                     value={inviteCode}
@@ -97,10 +97,10 @@ const Hero = ({ onLogin }: HeroProps) => {
                                     onKeyDown={handleKeyDown}
                                     placeholder="Enter invite code"
                                     maxLength={4}
-                                    className="px-4 py-3 text-base font-medium bg-white/10 backdrop-blur-sm text-transparent caret-gray-700 border border-gray-300 rounded-md outline-none focus:border-black transition-all duration-300 font-inter w-40 text-center uppercase tracking-widest placeholder:text-gray-400 placeholder:normal-case placeholder:tracking-normal selection:bg-gray-200"
+                                    className="px-3 min-[360px]:px-4 py-2 min-[360px]:py-3 text-sm min-[360px]:text-base font-medium bg-white/10 backdrop-blur-sm text-transparent caret-gray-700 border border-gray-300 rounded-md outline-none focus:border-black transition-all duration-300 font-inter w-32 min-[360px]:w-40 text-center uppercase tracking-widest placeholder:text-gray-400 placeholder:normal-case placeholder:tracking-normal selection:bg-gray-200"
                                 />
                                 {inviteCode.length > 0 && (
-                                    <span className="absolute inset-0 flex items-center justify-center text-base font-medium text-gray-700 pointer-events-none tracking-widest font-inter">
+                                    <span className="absolute inset-0 flex items-center justify-center text-sm min-[360px]:text-base font-medium text-gray-700 pointer-events-none tracking-widest font-inter">
                                         {'*'.repeat(inviteCode.length)}
                                     </span>
                                 )}
@@ -108,7 +108,7 @@ const Hero = ({ onLogin }: HeroProps) => {
                             <button
                                 onClick={handleLaunch}
                                 disabled={isValidating}
-                                className="px-8 py-3 text-base font-medium bg-black text-white border-none rounded-md cursor-pointer transition-all duration-300 ease-out hover:bg-gray-800 font-inter disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-5 min-[360px]:px-8 py-2 min-[360px]:py-3 text-sm min-[360px]:text-base font-medium bg-black text-white border-none rounded-md cursor-pointer transition-all duration-300 ease-out hover:bg-gray-800 font-inter disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isValidating ? "Validating..." : "Launch App"}
                             </button>

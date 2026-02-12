@@ -420,6 +420,17 @@ html, body {
   font-weight: 500;
 }
 
+@media (max-width: 359px) {
+  .marketing-hero-title {
+    font-size: 2.5rem;
+    margin-bottom: var(--spacing-md);
+  }
+
+  .marketing-hero-subtitle {
+    font-size: 1rem;
+  }
+}
+
 .marketing-hero-buttons {
   display: flex;
   gap: var(--spacing-md);

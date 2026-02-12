@@ -172,15 +172,15 @@ export default function AboutPage() {
         >
           <div className="flex-1 flex flex-col overflow-hidden bg-white font-inter">
             {/* Why Rez Section */}
-            <div className="flex-1 overflow-auto scrollbar-hide px-6 py-8">
-              <h2 className="text-6xl font-bold text-gray-900 mb-6" style={{ fontFamily: 'var(--font-instrument-serif), "Instrument Serif", serif' }}>
+            <div className="flex-1 overflow-auto scrollbar-hide px-4 min-[360px]:px-6 py-5 min-[360px]:py-8">
+              <h2 className="text-4xl min-[360px]:text-6xl font-bold text-gray-900 mb-4 min-[360px]:mb-6" style={{ fontFamily: 'var(--font-instrument-serif), "Instrument Serif", serif' }}>
                 Why Rez?
               </h2>
-              <div className="p-6 min-h-[400px]">
-                <p className="text-[21px] text-gray-800 leading-relaxed whitespace-pre-wrap">
+              <div className="p-3 min-[360px]:p-6 min-h-[400px]">
+                <p className="text-base min-[360px]:text-[21px] text-gray-800 leading-relaxed whitespace-pre-wrap">
                   {displayedText}
                   {currentIndex < ABOUT_TEXT.length && (
-                    <span className="inline-block w-0.5 h-8 bg-gray-900 ml-1 animate-pulse" />
+                    <span className="inline-block w-0.5 h-6 min-[360px]:h-8 bg-gray-900 ml-1 animate-pulse" />
                   )}
                 </p>
               </div>
@@ -198,7 +198,7 @@ export default function AboutPage() {
 
         {/* Right Dashboard */}
         <div
-          className="overflow-auto scrollbar-hide w-full lg:w-auto flex-1"
+          className="hidden lg:block overflow-auto scrollbar-hide w-full lg:w-auto flex-1"
           style={isDesktop ? { width: `${100 - leftWidth}%` } : undefined}
         >
           <TradesDashboard

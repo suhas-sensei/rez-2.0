@@ -384,7 +384,7 @@ export default function TradesDashboard({
       </div>
 
       {/* Content */}
-      <div className="w-full px-2 sm:px-3 xl:px-6 py-3 xl:py-5 overflow-auto flex-1">
+      <div className="w-full px-4 sm:px-3 xl:px-6 py-3 xl:py-5 overflow-auto flex-1">
         {/* AGENT CHAT - Show only the agent's internal monologue (reasoning type) */}
         {activeTab === 'AGENT CHAT' && (
           <div className="space-y-3 xl:space-y-4 overflow-x-hidden">
@@ -568,23 +568,27 @@ export default function TradesDashboard({
             ) : (
               sortedTrades.map((trade) => (
                 <div key={trade.id} className="bg-gray-50/50 border-b border-gray-300 pb-4 xl:pb-5 mb-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-1 sm:gap-0">
-                    <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-                      <span className="text-gray-400 text-[10px] sm:text-xs">↻</span>
-                      <span className="text-[10px] sm:text-xs xl:text-sm text-gray-600">{trade.action}</span>
-                      <span className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-900">{trade.asset}</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-0.5 sm:gap-0">
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                      <span className="text-gray-400 text-xs">↻</span>
+                      <span className="text-xs xl:text-sm text-gray-600">{trade.action}</span>
+                      <span className="text-xs xl:text-sm font-semibold text-gray-900">{trade.asset}</span>
                     </div>
                     <span className="text-[10px] sm:text-xs text-gray-400">{trade.date}</span>
                   </div>
-                  <div className="ml-0 sm:ml-6 space-y-1 text-[10px] sm:text-xs xl:text-sm text-gray-600">
-                    <p>Entry: {formatAmount(trade.priceFrom)} → Exit: {formatAmount(trade.priceTo)}</p>
+                  <div className="ml-0 sm:ml-6 space-y-1 text-xs xl:text-sm text-gray-600">
+                    <p className="hidden sm:block">Entry: {formatAmount(trade.priceFrom)} &rarr; Exit: {formatAmount(trade.priceTo)}</p>
+                    <div className="sm:hidden flex gap-4">
+                      <p>Entry: <span className="font-medium text-gray-800">{formatAmount(trade.priceFrom)}</span></p>
+                      <p>Exit: <span className="font-medium text-gray-800">{formatAmount(trade.priceTo)}</span></p>
+                    </div>
                     <p>Qty: {trade.quantity} ({formatAmount(trade.notionalTo)})</p>
                     <p>Holding time: {trade.holdingTime !== '-' ? trade.holdingTime : '< 1m'}</p>
                   </div>
                   <div className="ml-0 sm:ml-6 mt-2 flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] sm:text-xs xl:text-sm font-medium text-gray-700">NET P&L: </span>
-                      <span className={`text-[10px] sm:text-xs xl:text-sm font-bold ${trade.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      <span className="text-xs xl:text-sm font-medium text-gray-700">NET P&L: </span>
+                      <span className={`text-xs xl:text-sm font-bold ${trade.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                         {trade.pnl >= 0 ? '+' : ''}{formatAmount(trade.pnl)}
                       </span>
                     </div>

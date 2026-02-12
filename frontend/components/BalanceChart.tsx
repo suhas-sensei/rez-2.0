@@ -262,15 +262,15 @@ export default function BalanceChart({ currentBalance, className = '' }: Balance
   return (
     <div className={`w-full h-full flex flex-col overflow-hidden font-inter ${className}`}>
       {/* Balance display */}
-      <div className="flex items-center gap-3 px-4 py-2 xl:py-3 bg-white">
-        <span className="text-xl xl:text-2xl 2xl:text-3xl font-medium text-gray-900">Portfolio Value :</span>
+      <div className="flex items-center gap-1 min-[255px]:gap-1.5 min-[362px]:gap-3 px-2 min-[255px]:px-3 min-[362px]:px-4 py-2 xl:py-3 bg-white">
+        <span className="text-[10px] min-[255px]:text-sm min-[362px]:text-xl xl:text-2xl 2xl:text-3xl font-medium text-gray-900">Portfolio Value :</span>
         {currentBalance !== null && (
           <>
-            <span className="text-xl xl:text-2xl 2xl:text-3xl font-bold text-gray-900">
+            <span className="text-[10px] min-[255px]:text-sm min-[362px]:text-xl xl:text-2xl 2xl:text-3xl font-bold text-gray-900">
               {formatAmount(currentBalance)}
             </span>
             {balanceHistory.length > 1 && (
-              <span className={`text-base xl:text-lg ${pnlPercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              <span className={`text-[8px] min-[255px]:text-xs min-[362px]:text-base xl:text-lg ${pnlPercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                 {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
               </span>
             )}

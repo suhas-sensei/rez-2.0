@@ -126,20 +126,20 @@ export default function AgentController({
   };
 
   return (
-    <div className="bg-white px-8 py-4 xl:py-5 font-inter">
+    <div className="bg-white px-3 min-[365px]:px-4 min-[570px]:px-8 py-2 min-[365px]:py-3 min-[570px]:py-4 xl:py-5 font-inter">
       {/* Card with shadow */}
-      <div className="bg-gray-50/80 rounded-2xl border border-gray-100 p-5 xl:p-6 shadow-sm">
+      <div className="bg-gray-50/80 rounded-xl min-[365px]:rounded-2xl border border-gray-100 p-3 min-[365px]:p-3.5 min-[570px]:p-5 xl:p-6 shadow-sm">
         {/* Two column layout */}
-        <div className="flex gap-8 xl:gap-12">
-          {/* Left column - Trading Assets */}
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-3">
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="flex flex-col min-[660px]:flex-row gap-2 min-[365px]:gap-3 min-[570px]:gap-4 min-[660px]:gap-8 xl:gap-12">
+          {/* Trading Assets */}
+          <div className="flex-1 order-2 min-[660px]:order-1">
+            <div className="flex items-center gap-1.5 min-[570px]:gap-2 mb-1.5 min-[570px]:mb-3">
+              <svg className="w-3.5 h-3.5 min-[570px]:w-4 min-[570px]:h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Trading Assets</span>
+              <span className="text-[10px] min-[570px]:text-xs font-semibold text-gray-400 uppercase tracking-wider">Trading Assets</span>
             </div>
-            <div className="inline-flex flex-wrap gap-2 bg-gray-50/80 rounded-2xl p-3 shadow-sm border border-gray-100">
+            <div className="flex overflow-x-auto min-[330px]:overflow-visible min-[330px]:flex-wrap scrollbar-hide gap-1.5 min-[570px]:gap-2 bg-gray-50/80 rounded-xl min-[570px]:rounded-2xl p-2 min-[570px]:p-3 shadow-sm border border-gray-100">
               {AVAILABLE_ASSETS.map((asset) => {
                 const isSelected = selectedAssets.includes(asset.symbol);
                 return (
@@ -147,7 +147,7 @@ export default function AgentController({
                     key={asset.symbol}
                     onClick={() => toggleAsset(asset.symbol)}
                     disabled={isRunning}
-                    className={`px-4 py-1.5 text-sm font-medium rounded-full transition-all ${
+                    className={`shrink-0 px-3 min-[570px]:px-4 py-1 min-[570px]:py-1.5 text-xs min-[570px]:text-sm font-medium rounded-full transition-all ${
                       isSelected
                         ? `${asset.color} text-white shadow-md`
                         : `bg-white ${asset.textColor} ${asset.hoverColor} border ${asset.borderColor} shadow-sm`
@@ -161,17 +161,17 @@ export default function AgentController({
           </div>
 
           {/* Divider */}
-          <div className="w-px bg-gray-100 self-stretch" />
+          <div className="hidden min-[660px]:block w-px bg-gray-100 self-stretch" />
 
           {/* Right column - Trading Interval */}
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-3">
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex-1 order-1 min-[660px]:order-2">
+            <div className="flex items-center gap-1.5 min-[405px]:gap-2 mb-2 min-[405px]:mb-3">
+              <svg className="w-3.5 h-3.5 min-[405px]:w-4 min-[405px]:h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Trading Interval</span>
+              <span className="text-[10px] min-[405px]:text-xs font-semibold text-gray-400 uppercase tracking-wider">Trading Interval</span>
             </div>
-            <div className="inline-flex bg-gray-50/80 rounded-2xl p-2 shadow-sm border border-gray-100">
+            <div className="flex overflow-x-auto min-[330px]:overflow-visible scrollbar-hide min-[660px]:inline-flex bg-gray-50/80 rounded-xl min-[405px]:rounded-2xl p-1.5 min-[405px]:p-2 shadow-sm border border-gray-100">
               {INTERVALS.map((interval) => {
                 const isSelected = selectedInterval === interval.value;
                 return (
@@ -179,16 +179,16 @@ export default function AgentController({
                     key={interval.value}
                     onClick={() => !isRunning && onIntervalChange(interval.value)}
                     disabled={isRunning}
-                    className={`px-4 py-2.5 flex flex-col items-center min-w-[56px] rounded-lg transition-all ${
+                    className={`shrink-0 min-[330px]:shrink flex-1 min-[660px]:flex-initial px-2.5 min-[405px]:px-4 py-1.5 min-[405px]:py-2.5 flex flex-col items-center min-w-[44px] min-[405px]:min-w-[56px] rounded-md min-[405px]:rounded-lg transition-all ${
                       isSelected
                         ? 'bg-white shadow-sm border border-gray-200'
                         : 'hover:bg-gray-100'
                     } ${isRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                   >
-                    <span className={`text-base font-semibold ${isSelected ? 'text-gray-900' : 'text-gray-400'}`}>
+                    <span className={`text-sm min-[405px]:text-base font-semibold ${isSelected ? 'text-gray-900' : 'text-gray-400'}`}>
                       {interval.number}
                     </span>
-                    <span className={`text-xs ${isSelected ? 'text-gray-500' : 'text-gray-400'}`}>
+                    <span className={`text-[10px] min-[405px]:text-xs ${isSelected ? 'text-gray-500' : 'text-gray-400'}`}>
                       {interval.unit}
                     </span>
                   </button>
@@ -199,12 +199,12 @@ export default function AgentController({
         </div>
 
         {/* Summary line */}
-        <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between">
-          <p className="text-sm text-gray-400">
+        <div className="mt-3 min-[365px]:mt-4 min-[570px]:mt-5 pt-2 min-[365px]:pt-3 min-[570px]:pt-4 border-t border-gray-100 flex items-center justify-between">
+          <p className="text-[10px] min-[430px]:text-sm text-gray-400">
             Profile: <span className={`${PROFILE_COLORS[selectedProfile]} font-medium`}>{PROFILE_NAMES[selectedProfile]}</span>
-            <span className="mx-2 text-gray-300">|</span>
+            <span className="mx-1 min-[430px]:mx-2 text-gray-300">|</span>
             Assets: <span className="text-gray-600 font-medium">{selectedAssets.join(', ')}</span>
-            <span className="mx-2 text-gray-300">|</span>
+            <span className="mx-1 min-[430px]:mx-2 text-gray-300">|</span>
             Interval: <span className="text-gray-600 font-medium">{getIntervalLabel(selectedInterval)}</span>
           </p>
 
@@ -213,12 +213,12 @@ export default function AgentController({
             <button
               onClick={onCloseAllPositions}
               disabled={isClosingPositions || positionsCount === 0}
-              className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-gray-50 rounded-lg border border-gray-200 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 min-[430px]:gap-2 px-2 min-[430px]:px-3 py-1 min-[430px]:py-1.5 bg-white hover:bg-gray-50 rounded-lg border border-gray-200 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <svg className={`w-4 h-4 ${positionsCount > 0 ? 'text-orange-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-3.5 h-3.5 min-[430px]:w-4 min-[430px]:h-4 ${positionsCount > 0 ? 'text-orange-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-              <span className={`text-sm font-medium ${positionsCount > 0 ? 'text-orange-600' : 'text-gray-500'}`}>
+              <span className={`text-xs min-[430px]:text-sm font-medium ${positionsCount > 0 ? 'text-orange-600' : 'text-gray-500'}`}>
                 {isClosingPositions ? 'Closing...' : 'Close All Positions'}
               </span>
             </button>
@@ -228,12 +228,12 @@ export default function AgentController({
 
       {/* Start/Stop/Pause Buttons */}
       {isRunning ? (
-        <div className="flex gap-3 mt-4">
+        <div className="flex gap-2 min-[365px]:gap-3 mt-2 min-[365px]:mt-3 min-[570px]:mt-4">
           {/* Pause/Resume Button */}
           <button
             onClick={isPaused ? handleResume : handlePause}
             disabled={isPausing || isResuming}
-            className={`flex-1 py-3 xl:py-4 rounded-xl font-semibold text-sm xl:text-base transition-all ${
+            className={`flex-1 py-2 min-[365px]:py-2.5 min-[570px]:py-3 xl:py-4 rounded-lg min-[365px]:rounded-xl font-semibold text-xs min-[365px]:text-sm xl:text-base transition-all ${
               isPausing || isResuming
                 ? 'bg-gradient-to-r from-gray-400 to-gray-500 cursor-not-allowed text-white'
                 : isPaused
@@ -281,7 +281,7 @@ export default function AgentController({
           <button
             onClick={handleStop}
             disabled={isStopping}
-            className={`flex-1 py-3 xl:py-4 rounded-xl font-semibold text-sm xl:text-base transition-all text-white ${
+            className={`flex-1 py-2 min-[365px]:py-2.5 min-[570px]:py-3 xl:py-4 rounded-lg min-[365px]:rounded-xl font-semibold text-xs min-[365px]:text-sm xl:text-base transition-all text-white ${
               isStopping
                 ? 'bg-gradient-to-r from-gray-400 to-gray-500 cursor-not-allowed'
                 : 'bg-red-500 hover:bg-red-600'
@@ -312,7 +312,7 @@ export default function AgentController({
         <button
           onClick={handleStart}
           disabled={isStarting}
-          className={`w-full mt-4 py-3 xl:py-4 rounded-xl font-semibold text-sm xl:text-base transition-all text-white shadow-lg hover:shadow-xl ${
+          className={`w-full mt-2 min-[365px]:mt-3 min-[570px]:mt-4 py-2 min-[365px]:py-2.5 min-[570px]:py-3 xl:py-4 rounded-lg min-[365px]:rounded-xl font-semibold text-xs min-[365px]:text-sm xl:text-base transition-all text-white shadow-lg hover:shadow-xl ${
             isStarting
               ? 'bg-gradient-to-r from-gray-400 to-gray-500 cursor-not-allowed'
               : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700'

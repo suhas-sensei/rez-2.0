@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useCurrency } from '@/context/CurrencyContext';
 
 interface AgentStatsCirclesProps {
@@ -79,6 +80,29 @@ function formatLargeNumber(num: number): string {
 
 export default function AgentStatsCircles({ stats, trades = [] }: AgentStatsCirclesProps) {
   const { symbol: currencySymbol, convertAmount } = useCurrency();
+  const [isCompact, setIsCompact] = useState(false);
+  const [isNarrow, setIsNarrow] = useState(false);
+  const [isVeryNarrow, setIsVeryNarrow] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 719px)');
+    const mqNarrow = window.matchMedia('(max-width: 504px)');
+    const mqVeryNarrow = window.matchMedia('(max-width: 402px)');
+    setIsCompact(mq.matches);
+    setIsNarrow(mqNarrow.matches);
+    setIsVeryNarrow(mqVeryNarrow.matches);
+    const handler = (e: MediaQueryListEvent) => setIsCompact(e.matches);
+    const handlerNarrow = (e: MediaQueryListEvent) => setIsNarrow(e.matches);
+    const handlerVeryNarrow = (e: MediaQueryListEvent) => setIsVeryNarrow(e.matches);
+    mq.addEventListener('change', handler);
+    mqNarrow.addEventListener('change', handlerNarrow);
+    mqVeryNarrow.addEventListener('change', handlerVeryNarrow);
+    return () => {
+      mq.removeEventListener('change', handler);
+      mqNarrow.removeEventListener('change', handlerNarrow);
+      mqVeryNarrow.removeEventListener('change', handlerVeryNarrow);
+    };
+  }, []);
 
   // Format currency with conversion
   const formatCurrency = (num: number): string => {
@@ -112,56 +136,56 @@ export default function AgentStatsCircles({ stats, trades = [] }: AgentStatsCirc
   ];
 
   return (
-    <div className="bg-white border-t border-gray-100 p-6 font-inter"
-      style={{
+    <div className="bg-white border-t border-gray-100 p-2.5 min-[307px]:p-4 min-[720px]:p-6 font-inter"
+      style={isVeryNarrow ? undefined : {
         backgroundImage: 'url(/cit2.png)',
         backgroundPosition: 'right center',
         backgroundRepeat: 'no-repeat',
-        backgroundSize: '70% auto',
+        backgroundSize: 'cover',
       }}
     >
-      <div className="flex gap-8">
+      <div className="flex gap-2.5 min-[307px]:gap-4 min-[720px]:gap-8">
         {/* Left Section - Stats */}
         <div className="shrink-0">
           {/* Top Section: Transaction Card */}
-          <div className="mb-6">
-            <div className="text-gray-500 text-base font-medium mb-2">Transactions</div>
-            <div className="flex items-center gap-4">
-              <span className="text-5xl font-bold text-gray-900">
+          <div className="mb-3 min-[720px]:mb-6">
+            <div className="text-gray-500 text-[10px] min-[307px]:text-xs min-[720px]:text-base font-medium mb-1 min-[720px]:mb-2">Transactions</div>
+            <div className="flex items-center gap-2 min-[720px]:gap-4">
+              <span className="text-2xl min-[307px]:text-3xl min-[720px]:text-5xl font-bold text-gray-900">
                 {hasData ? formatLargeNumber(totalTransactions) : '—'}
               </span>
-              <span className={`px-3 py-1.5 rounded text-base font-semibold ${
+              <span className={`px-1.5 min-[307px]:px-2 min-[720px]:px-3 py-0.5 min-[307px]:py-1 min-[720px]:py-1.5 rounded text-[10px] min-[307px]:text-xs min-[720px]:text-base font-semibold ${
                 pnlPercentage >= 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
               }`}>
                 {pnlPercentage >= 0 ? '↑' : '↓'} {Math.abs(pnlPercentage).toFixed(2)}%
               </span>
             </div>
-            <div className="text-gray-400 text-sm mt-2">Compare from last 24hrs</div>
+            <div className="text-gray-400 text-[10px] min-[307px]:text-xs min-[720px]:text-sm mt-1 min-[720px]:mt-2">Compare from last 24hrs</div>
           </div>
 
           {/* Stat Rows */}
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-2 min-[307px]:gap-3 min-[720px]:gap-6">
             {/* Longs / Shorts */}
-            <div className="flex gap-4">
-              <div className="w-24">
-                <div className="text-green-500 text-sm font-medium">LONGS</div>
-                <div className="text-green-600 text-xl font-bold">{hasData ? formatLargeNumber(longs) : '—'}</div>
+            <div className="flex gap-3 min-[307px]:gap-4">
+              <div className="w-16 min-[307px]:w-20 min-[720px]:w-24">
+                <div className="text-green-500 text-[10px] min-[307px]:text-xs min-[720px]:text-sm font-medium">LONGS</div>
+                <div className="text-green-600 text-sm min-[307px]:text-base min-[720px]:text-xl font-bold">{hasData ? formatLargeNumber(longs) : '—'}</div>
               </div>
-              <div className="w-24">
-                <div className="text-red-500 text-sm font-medium">SHORTS</div>
-                <div className="text-red-600 text-xl font-bold">{hasData ? formatLargeNumber(shorts) : '—'}</div>
+              <div className="w-16 min-[307px]:w-20 min-[720px]:w-24">
+                <div className="text-red-500 text-[10px] min-[307px]:text-xs min-[720px]:text-sm font-medium">SHORTS</div>
+                <div className="text-red-600 text-sm min-[307px]:text-base min-[720px]:text-xl font-bold">{hasData ? formatLargeNumber(shorts) : '—'}</div>
               </div>
             </div>
 
             {/* Long Vol / Short Vol */}
-            <div className="flex gap-4">
-              <div className="w-24">
-                <div className="text-green-500 text-sm font-medium">LONG VOL</div>
-                <div className="text-green-600 text-xl font-bold">{hasData ? formatCurrency(longVolume) : '—'}</div>
+            <div className="flex gap-3 min-[307px]:gap-4">
+              <div className="w-16 min-[307px]:w-20 min-[720px]:w-24">
+                <div className="text-green-500 text-[10px] min-[307px]:text-xs min-[720px]:text-sm font-medium">LONG VOL</div>
+                <div className="text-green-600 text-sm min-[307px]:text-base min-[720px]:text-xl font-bold">{hasData ? formatCurrency(longVolume) : '—'}</div>
               </div>
-              <div className="w-24">
-                <div className="text-red-500 text-sm font-medium">SHORT VOL</div>
-                <div className="text-red-600 text-xl font-bold">{hasData ? formatCurrency(shortVolume) : '—'}</div>
+              <div className="w-16 min-[307px]:w-20 min-[720px]:w-24">
+                <div className="text-red-500 text-[10px] min-[307px]:text-xs min-[720px]:text-sm font-medium">SHORT VOL</div>
+                <div className="text-red-600 text-sm min-[307px]:text-base min-[720px]:text-xl font-bold">{hasData ? formatCurrency(shortVolume) : '—'}</div>
               </div>
             </div>
           </div>
@@ -169,30 +193,43 @@ export default function AgentStatsCircles({ stats, trades = [] }: AgentStatsCirc
 
         {/* Right Section - Circles and Cards */}
         <div className="flex-1 flex flex-col">
-          {/* Circular Progress Indicators */}
-          <div className="flex items-center gap-10 mb-6">
-            {changes.map((change) => (
-              <div key={change.label} className="flex flex-col items-center gap-2">
-                <CircleProgress percent={change.value} size={80} strokeWidth={7} />
-                <span className="text-sm text-gray-500 font-medium">{change.label}</span>
-              </div>
-            ))}
-          </div>
+          {/* Timeframe Returns */}
+          {isNarrow ? (
+            <div className={`grid ${isVeryNarrow ? 'grid-cols-1' : 'grid-cols-2'} gap-x-4 gap-y-1 mb-3`}>
+              {changes.map((change) => (
+                <div key={change.label} className="flex items-center gap-2">
+                  <span className="text-[10px] min-[307px]:text-xs text-gray-500 font-medium w-6">{change.label}</span>
+                  <span className={`text-xs min-[307px]:text-sm font-semibold ${change.value >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {change.value >= 0 ? '+' : ''}{change.value}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center gap-4 min-[720px]:gap-10 mb-3 min-[720px]:mb-6">
+              {changes.map((change) => (
+                <div key={change.label} className="flex flex-col items-center gap-1 min-[720px]:gap-2">
+                  <CircleProgress percent={change.value} size={isCompact ? 60 : 80} strokeWidth={isCompact ? 5 : 7} />
+                  <span className="text-xs min-[720px]:text-sm text-gray-500 font-medium">{change.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Cards Row */}
-          <div className="flex gap-8">
+          <div className="flex flex-col min-[357px]:flex-row gap-1 min-[357px]:gap-4 min-[720px]:gap-8">
             {/* Win Rate */}
             <div className="flex flex-col">
-              <div className="text-gray-500 text-sm font-medium mb-1">Win Rate</div>
-              <div className="text-[2.75rem] font-bold text-gray-900">
+              <div className="text-gray-500 text-[8px] min-[307px]:text-[9px] min-[357px]:text-[10px] min-[403px]:text-xs min-[720px]:text-sm font-medium mb-0.5 min-[357px]:mb-1">Win Rate</div>
+              <div className="text-sm min-[307px]:text-base min-[357px]:text-lg min-[403px]:text-2xl min-[720px]:text-[2.75rem] font-bold text-gray-900">
                 {hasData ? `${winRate.toFixed(1)}%` : '—'}
               </div>
             </div>
 
             {/* Total P&L */}
             <div className="flex flex-col">
-              <div className="text-gray-500 text-sm font-medium mb-1">Total P&L</div>
-              <div className={`text-[2.75rem] font-bold ${totalPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <div className="text-gray-500 text-[8px] min-[307px]:text-[9px] min-[357px]:text-[10px] min-[403px]:text-xs min-[720px]:text-sm font-medium mb-0.5 min-[357px]:mb-1">Total P&L</div>
+              <div className={`text-sm min-[307px]:text-base min-[357px]:text-lg min-[403px]:text-2xl min-[720px]:text-[2.75rem] font-bold ${totalPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {hasData ? `${totalPnl >= 0 ? '+' : ''}${currencySymbol}${formatLargeNumber(convertAmount(Math.abs(totalPnl)))}` : '—'}
               </div>
             </div>

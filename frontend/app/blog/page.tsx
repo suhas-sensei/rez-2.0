@@ -147,14 +147,14 @@ export default function BlogPage() {
 
         {/* Main Content Section - Blog */}
         <div
-          className="border-b lg:border-b-0 lg:border-r border-gray-200 overflow-hidden w-full lg:w-auto flex flex-col"
+          className="flex-1 lg:flex-initial border-b lg:border-b-0 lg:border-r border-gray-200 overflow-hidden w-full lg:w-auto flex flex-col"
           style={isDesktop ? { width: `calc(${leftWidth}% - 64px)` } : undefined}
         >
           <div className="flex-1 flex flex-col overflow-hidden bg-white font-inter items-center justify-center">
-            <h1 className="text-6xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-instrument-serif), "Instrument Serif", serif' }}>
+            <h1 className="text-4xl min-[360px]:text-6xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-instrument-serif), "Instrument Serif", serif' }}>
               Coming Soon
             </h1>
-           
+
           </div>
         </div>
 
@@ -168,7 +168,7 @@ export default function BlogPage() {
 
         {/* Right Dashboard */}
         <div
-          className="overflow-auto scrollbar-hide w-full lg:w-auto flex-1"
+          className="hidden lg:block overflow-auto scrollbar-hide w-full lg:w-auto flex-1"
           style={isDesktop ? { width: `${100 - leftWidth}%` } : undefined}
         >
           <TradesDashboard

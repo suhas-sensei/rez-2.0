@@ -52,6 +52,7 @@ export default function Navbar() {
         {isMenuOpen && (
           <div className="lg:hidden mt-2 pb-2 border-t border-gray-200 pt-2">
             <div className="flex flex-col space-y-3 font-inter">
+              <Link href="/" className="text-sm font-medium text-black hover:text-gray-600 transition-colors" onClick={() => setIsMenuOpen(false)}>PORTFOLIO</Link>
               <Link href="/leaderboard" className="text-sm font-medium text-black hover:text-gray-600 transition-colors" onClick={() => setIsMenuOpen(false)}>LEADERBOARD</Link>
               <Link href="/blog" className="text-sm font-medium text-black hover:text-gray-600 transition-colors" onClick={() => setIsMenuOpen(false)}>BLOG</Link>
               <Link href="/about" className="text-sm font-medium text-black hover:text-gray-600 transition-colors" onClick={() => setIsMenuOpen(false)}>ABOUT US</Link>

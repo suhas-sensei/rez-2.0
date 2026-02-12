@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 export type RiskProfile = 'conservative' | 'moderate' | 'high' | 'debug';
 
@@ -108,10 +108,56 @@ export default function RiskProfileSelector({
     },
   };
 
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(1);
+  const [enableTransition, setEnableTransition] = useState(true);
+  const isAnimating = useRef(false);
+  const [isNarrow, setIsNarrow] = useState(false);
 
-  const goLeft = () => setActiveIndex((i) => (i - 1 + RISK_PROFILES.length) % RISK_PROFILES.length);
-  const goRight = () => setActiveIndex((i) => (i + 1) % RISK_PROFILES.length);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 339px)');
+    setIsNarrow(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsNarrow(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  const cardWidth = isNarrow ? 100 : 70;
+  const cardOffset = isNarrow ? 0 : 15;
+
+  // Clone last card at start + first card at end for seamless looping
+  const extendedProfiles = [
+    RISK_PROFILES[RISK_PROFILES.length - 1],
+    ...RISK_PROFILES,
+    RISK_PROFILES[0],
+  ];
+
+  const realIndex = ((activeIndex - 1) % RISK_PROFILES.length + RISK_PROFILES.length) % RISK_PROFILES.length;
+
+  const goLeft = () => {
+    if (isAnimating.current) return;
+    isAnimating.current = true;
+    setEnableTransition(true);
+    setActiveIndex((i) => i - 1);
+  };
+
+  const goRight = () => {
+    if (isAnimating.current) return;
+    isAnimating.current = true;
+    setEnableTransition(true);
+    setActiveIndex((i) => i + 1);
+  };
+
+  const handleTransitionEnd = (e: React.TransitionEvent) => {
+    if (e.target !== e.currentTarget) return;
+    isAnimating.current = false;
+    if (activeIndex === 0) {
+      setEnableTransition(false);
+      setActiveIndex(RISK_PROFILES.length);
+    } else if (activeIndex === extendedProfiles.length - 1) {
+      setEnableTransition(false);
+      setActiveIndex(1);
+    }
+  };
 
   const renderCard = (profile: typeof RISK_PROFILES[0]) => {
     const isSelected = selectedProfile === profile.id;
@@ -162,8 +208,8 @@ export default function RiskProfileSelector({
   };
 
   return (
-    <div className="bg-white px-4 min-[720px]:px-8 py-4 xl:py-5 font-inter">
-      <h3 className="text-base xl:text-lg font-semibold text-gray-900 mb-4">Risk Profile</h3>
+    <div className="bg-white px-3 min-[365px]:px-4 min-[570px]:px-4 min-[720px]:px-8 py-2 min-[365px]:py-2.5 min-[570px]:py-4 xl:py-5 font-inter">
+      <h3 className="text-sm min-[365px]:text-base xl:text-lg font-semibold text-gray-900 mb-2 min-[365px]:mb-2.5 min-[570px]:mb-4">Risk Profile</h3>
 
       {/* Grid layout - 720px and above */}
       <div className="hidden min-[720px]:grid grid-cols-4 gap-3 xl:gap-4">
@@ -174,20 +220,26 @@ export default function RiskProfileSelector({
       <div className="min-[720px]:hidden relative">
         <div className="overflow-hidden">
           <div
-            className="flex transition-transform duration-300 ease-in-out"
+            className={`flex ${enableTransition ? 'transition-transform duration-300 ease-in-out' : ''}`}
+            onTransitionEnd={handleTransitionEnd}
             style={{
-              transform: `translateX(calc(-${activeIndex * 70}% + ${activeIndex === 0 ? '0%' : '15%'}))`,
+              transform: `translateX(calc(-${activeIndex * cardWidth}% + ${cardOffset}%))`,
             }}
           >
-            {RISK_PROFILES.map((profile, i) => (
+            {extendedProfiles.map((profile, i) => (
               <div
-                key={profile.id}
-                className="shrink-0 px-1.5 transition-opacity duration-300"
+                key={`${profile.id}-${i}`}
+                className={`shrink-0 transition-opacity duration-300 ${isNarrow ? 'px-0' : 'px-1.5'}`}
                 style={{
-                  width: '70%',
+                  width: `${cardWidth}%`,
                   opacity: i === activeIndex ? 1 : 0.5,
                 }}
-                onClick={() => setActiveIndex(i)}
+                onClick={() => {
+                  if (i !== activeIndex) {
+                    setEnableTransition(true);
+                    setActiveIndex(i);
+                  }
+                }}
               >
                 {renderCard(profile)}
               </div>
@@ -198,9 +250,13 @@ export default function RiskProfileSelector({
         {/* Left arrow */}
         <button
           onClick={goLeft}
-          className="absolute left-1 top-1/2 -translate-y-1/2 z-10 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 border border-gray-200 shadow-md hover:bg-gray-50 transition-colors"
+          className={`absolute top-1/2 -translate-y-1/2 z-10 ${
+            isNarrow
+              ? '-left-1 p-1'
+              : 'left-1 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 border border-gray-200 shadow-md hover:bg-gray-50 transition-colors'
+          }`}
         >
-          <svg className="w-3.5 h-3.5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className={`${isNarrow ? 'w-4 h-4 text-gray-400' : 'w-3.5 h-3.5 text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
@@ -208,9 +264,13 @@ export default function RiskProfileSelector({
         {/* Right arrow */}
         <button
           onClick={goRight}
-          className="absolute right-1 top-1/2 -translate-y-1/2 z-10 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 border border-gray-200 shadow-md hover:bg-gray-50 transition-colors"
+          className={`absolute top-1/2 -translate-y-1/2 z-10 ${
+            isNarrow
+              ? '-right-1 p-1'
+              : 'right-1 w-7 h-7 flex items-center justify-center rounded-full bg-white/90 border border-gray-200 shadow-md hover:bg-gray-50 transition-colors'
+          }`}
         >
-          <svg className="w-3.5 h-3.5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className={`${isNarrow ? 'w-4 h-4 text-gray-400' : 'w-3.5 h-3.5 text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
           </svg>
         </button>
@@ -221,9 +281,12 @@ export default function RiskProfileSelector({
         {RISK_PROFILES.map((profile, i) => (
           <button
             key={profile.id}
-            onClick={() => setActiveIndex(i)}
+            onClick={() => {
+              setEnableTransition(true);
+              setActiveIndex(i + 1);
+            }}
             className={`w-1.5 h-1.5 rounded-full transition-all ${
-              i === activeIndex ? 'bg-gray-700 w-4' : 'bg-gray-300'
+              realIndex === i ? 'bg-gray-700 w-4' : 'bg-gray-300'
             }`}
           />
         ))}

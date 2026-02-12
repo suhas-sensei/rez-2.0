@@ -154,15 +154,18 @@ function HomeContent() {
         setIsAgentRunning(data.running);
         setIsAgentPaused(data.paused ?? false);
 
-        // Restore last used config from backend (source of truth)
-        if (data.assets && data.assets.length > 0) {
-          setSelectedAssets(data.assets);
-        }
-        if (data.interval) {
-          setSelectedInterval(data.interval);
-        }
-        if (data.riskProfile) {
-          setSelectedProfile(data.riskProfile as RiskProfile);
+        // Restore last used config from backend only when agent is running
+        // (so user can freely change settings when agent is off)
+        if (data.running) {
+          if (data.assets && data.assets.length > 0) {
+            setSelectedAssets(data.assets);
+          }
+          if (data.interval) {
+            setSelectedInterval(data.interval);
+          }
+          if (data.riskProfile) {
+            setSelectedProfile(data.riskProfile as RiskProfile);
+          }
         }
       } catch (error) {
         console.error('Failed to check agent status:', error);
@@ -500,10 +503,12 @@ function HomeContent() {
 
   // Show markets dashboard if logged in
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-auto lg:overflow-hidden bg-white">
       <Navbar />
-      <AggregateBar />
-      <main className="flex-1 bg-white w-full flex flex-col lg:flex-row overflow-hidden">
+      <div className="shrink-0">
+        <AggregateBar />
+      </div>
+      <main className="lg:flex-1 bg-white w-full flex flex-col lg:flex-row lg:overflow-hidden">
         {/* Portfolio Sidebar - Hidden on mobile */}
         <div className="hidden lg:block shrink-0">
           <PortfolioSidebar
@@ -514,14 +519,14 @@ function HomeContent() {
 
         {/* Main Content Section */}
         <div
-          className="border-b lg:border-b-0 lg:border-r border-gray-200 overflow-hidden w-full lg:w-auto flex flex-col"
+          className="border-b lg:border-b-0 lg:border-r border-gray-200 overflow-visible lg:overflow-hidden w-full lg:w-auto flex flex-col"
           style={isDesktop ? { width: `calc(${leftWidth}% - 64px)` } : undefined}
         >
           {isPortfolioView ? (
             /* Portfolio View */
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="lg:flex-1 flex flex-col overflow-visible lg:overflow-hidden">
               {portfolioTab === 'config' && (
-                <div className="flex-1 overflow-auto">
+                <div className="lg:flex-1 overflow-visible lg:overflow-auto">
                   <PortfolioHeader
                     accountState={accountState}
                     walletAddress={walletAddress}
@@ -559,7 +564,7 @@ function HomeContent() {
               )}
 
               {portfolioTab === 'growth' && (
-                <div className="flex-1 min-h-0 flex flex-col overflow-auto">
+                <div className="flex-1 min-h-[calc(100dvh-80px)] lg:min-h-0 flex flex-col overflow-auto">
                   {/* Back to Config button */}
                   <div className="px-4 py-3 border-b border-gray-200 bg-white shrink-0">
                     <button
@@ -619,7 +624,7 @@ function HomeContent() {
 
         {/* Right Dashboard */}
         <div
-          className="overflow-auto scrollbar-hide w-full lg:w-auto flex-1"
+          className={`overflow-hidden scrollbar-hide w-full lg:w-auto lg:flex-1 h-[50vh] lg:h-auto lg:min-h-0 ${portfolioTab === 'settings' || portfolioTab === 'growth' ? 'hidden lg:block' : ''}`}
           style={isDesktop ? { width: `${100 - leftWidth}%` } : undefined}
         >
           <TradesDashboard
